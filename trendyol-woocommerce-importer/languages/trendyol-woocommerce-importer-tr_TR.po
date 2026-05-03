@@ -1,0 +1,370 @@
+# Trendyol WooCommerce Importer - Turkish Translation
+# Copyright (C) 2026
+# This file is distributed under the same license as the Trendyol WooCommerce Importer package.
+msgid ""
+msgstr ""
+"Project-Id-Version: Trendyol WooCommerce Importer 1.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-15 00:00:00+0000\n"
+"PO-Revision-Date: 2026-04-15 00:00:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Turkish\n"
+"Language: tr_TR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#: trendyol-woocommerce-importer.php
+msgid "Trendyol WooCommerce Importer requires WooCommerce to be installed and activated."
+msgstr "Trendyol WooCommerce İçe Aktarıcı, WooCommerce'in kurulu ve etkin olmasını gerektirir."
+
+#: includes/class-scraper.php
+msgid "Only Trendyol.com product links are allowed."
+msgstr "Yalnızca Trendyol.com ürün bağlantılarına izin verilir."
+
+msgid "Product page could not be retrieved from Trendyol! Error:"
+msgstr "Ürün sayfası Trendyol'dan alınamadı! Hata:"
+
+msgid "Failed to fetch product page. Status code:"
+msgstr "Ürün sayfası alınamadı. Durum kodu:"
+
+msgid "Only Trendyol.com product links are accepted."
+msgstr "Yalnızca Trendyol.com ürün bağlantıları kabul edilir."
+
+#: admin/admin-page.php
+msgid "Import Product from Trendyol"
+msgstr "Trendyol'dan Ürün İçe Aktarma"
+
+msgid "Quickly and easily import products directly from Trendyol to your WooCommerce store. Just paste a Trendyol product link below and we'll handle the rest."
+msgstr "Trendyol'dan ürünleri doğrudan WooCommerce mağazanıza hızlı ve kolay bir şekilde içe aktarın. Aşağıya bir Trendyol ürün bağlantısı yapıştırın ve geri kalanını biz halledelim."
+
+msgid "Trendyol Product Link"
+msgstr "Trendyol Ürün Bağlantısı"
+
+msgid "Only Trendyol.com product links are accepted. Copy the full URL from your browser address bar."
+msgstr "Yalnızca Trendyol.com ürün bağlantıları kabul edilir. Tarayıcı adres çubuğundan tam URL'yi kopyalayın."
+
+msgid "🔍 Preview Product"
+msgstr "🔍 Ürünü Önizle"
+
+msgid "💡 Tips"
+msgstr "💡 İpuçları"
+
+msgid "Make sure the product page loads properly before importing."
+msgstr "İçe aktarmadan önce ürün sayfasının düzgün yüklendiğinden emin olun."
+
+msgid "Products are created as drafts - review them before publishing."
+msgstr "Ürünler taslak olarak oluşturulur - yayınlamadan önce gözden geçirin."
+
+msgid "Product images are automatically downloaded and added to your media library."
+msgstr "Ürün resimleri otomatik olarak indirilir ve medya kütüphanenize eklenir."
+
+msgid "Size variations are automatically created for variable products."
+msgstr "Beden çeşitleri değişken ürünler için otomatik olarak oluşturulur."
+
+#: admin/templates/preview.php
+msgid "Product Preview"
+msgstr "Ürün Önizlemesi"
+
+msgid "Preview Product Details"
+msgstr "Ürün Ayrıntılarını Önizle"
+
+msgid "Review the product information before importing"
+msgstr "İçe aktarmadan önce ürün bilgilerini gözden geçirin"
+
+msgid "Warning"
+msgstr "Uyarı"
+
+msgid "Some product information could not be extracted. Please review the details below."
+msgstr "Bazı ürün bilgileri alınamadı. Lütfen aşağıdaki ayrıntıları gözden geçirin."
+
+msgid "All Details Found"
+msgstr "Tüm Ayrıntılar Bulundu"
+
+msgid "Product information has been successfully extracted from Trendyol."
+msgstr "Ürün bilgileri Trendyol'dan başarıyla alındı."
+
+msgid "Product Name"
+msgstr "Ürün Adı"
+
+msgid "Price"
+msgstr "Fiyat"
+
+msgid "Images"
+msgstr "Resimler"
+
+msgid "Sizes"
+msgstr "Bedenler"
+
+msgid "Product Information"
+msgstr "Ürün Bilgileri"
+
+msgid "Name:"
+msgstr "Ad:"
+
+msgid "Not found"
+msgstr "Bulunamadı"
+
+msgid "Available Sizes:"
+msgstr "Mevcut Bedenler:"
+
+msgid "No sizes found"
+msgstr "Beden bulunamadı"
+
+msgid "Additional Info:"
+msgstr "Ek Bilgi:"
+
+msgid "Product Images"
+msgstr "Ürün Resimleri"
+
+msgid "No images found."
+msgstr "Resim bulunamadı."
+
+msgid "✅ Import to WooCommerce"
+msgstr "✅ WooCommerce'e İçe Aktar"
+
+msgid "❌ Cancel"
+msgstr "❌ İptal"
+
+#: admin/templates/success.php
+msgid "Import Successful"
+msgstr "İçe Aktarma Başarılı"
+
+msgid "Success!"
+msgstr "Başarılı!"
+
+msgid "Product has been successfully imported to WooCommerce."
+msgstr "Ürün WooCommerce'e başarıyla içe aktarıldı."
+
+msgid "Edit Product"
+msgstr "Ürünü Düzenle"
+
+msgid "View Product"
+msgstr "Ürünü Görüntüle"
+
+msgid "Import Another Product"
+msgstr "Başka Ürün İçe Aktar"
+
+msgid "Go to Products"
+msgstr "Ürünlere Git"
+
+#: admin/settings-page.php
+msgid "⚙️ Plugin Settings"
+msgstr "⚙️ Plugin Ayarları"
+
+msgid "Permissions"
+msgstr "İzinler"
+
+msgid "Who can import products?"
+msgstr "Ürünleri kimler içe aktarabilir?"
+
+msgid "Who can sync products?"
+msgstr "Ürünleri kimler senkronize edebilir?"
+
+msgid "Select the minimum user role required to import products."
+msgstr "Ürünleri içe aktarmak için gereken minimum kullanıcı rolünü seçin."
+
+msgid "Select the minimum user role required to sync products with Trendyol."
+msgstr "Ürünleri Trendyol ile senkronize etmek için gereken minimum kullanıcı rolünü seçin."
+
+msgid "🔄 Auto Synchronization"
+msgstr "🔄 Otomatik Senkronizasyon"
+
+msgid "Enable automatic synchronization"
+msgstr "Otomatik senkronizasyonu etkinleştir"
+
+msgid "If enabled, products will be automatically synced at the interval specified below."
+msgstr "Etkinleştirilirse, ürünler aşağıda belirtilen aralıkta otomatik olarak senkronize edilecektir."
+
+msgid "Sync Interval"
+msgstr "Senkronizasyon Aralığı"
+
+msgid "Hourly"
+msgstr "Saatlik"
+
+msgid "Twice Daily"
+msgstr "Günde İki Kez"
+
+msgid "Daily"
+msgstr "Günlük"
+
+msgid "Weekly"
+msgstr "Haftalık"
+
+msgid "📊 Sync Options"
+msgstr "📊 Senkronizasyon Seçenekleri"
+
+msgid "Sync prices from Trendyol"
+msgstr "Trendyol'dan fiyatları senkronize et"
+
+msgid "Price Markup (%)"
+msgstr "Fiyat Işaretlemesi (%)"
+
+msgid "Add a percentage markup to Trendyol prices. Leave 0 for no markup."
+msgstr "Trendyol fiyatlarına yüzdelik bir işaretleme ekleyin. İşaretleme yok için 0 bırakın."
+
+msgid "Sync stock status from Trendyol"
+msgstr "Trendyol'dan stok durumunu senkronize et"
+
+msgid "If enabled, stock status will be updated based on Trendyol availability."
+msgstr "Etkinleştirilirse, stok durumu Trendyol kullanılabilirliğine göre güncellenecektir."
+
+msgid "Sync descriptions from Trendyol"
+msgstr "Trendyol'dan açıklamaları senkronize et"
+
+msgid "📥 Import Options"
+msgstr "📥 İçe Aktarma Seçenekleri"
+
+msgid "Maximum number of images to import"
+msgstr "İçe aktarılacak maksimum resim sayısı"
+
+msgid "Limit the number of product images downloaded from Trendyol."
+msgstr "Trendyol'dan indirilen ürün resmilerinin sayısını sınırlayın."
+
+msgid "🧹 Maintenance"
+msgstr "🧹 Bakım"
+
+msgid "Keep logs for (days)"
+msgstr "Günlükleri (gün) tutun"
+
+msgid "Old logs will be automatically deleted after this period."
+msgstr "Eski günlükler bu dönemden sonra otomatik olarak silinecektir."
+
+msgid "🔗 Advanced - Webhooks"
+msgstr "🔗 Gelişmiş - Web Kancaları"
+
+msgid "Enable webhook notifications"
+msgstr "Web kancası bildirimlerini etkinleştir"
+
+msgid "Webhook URL"
+msgstr "Web Kancası URL'si"
+
+msgid "Sync results will be sent to this URL as POST requests."
+msgstr "Senkronizasyon sonuçları bu URL'ye POST istekleri olarak gönderilecektir."
+
+msgid "🐛 Debug"
+msgstr "🐛 Hata Ayıklama"
+
+msgid "Enable debug mode"
+msgstr "Hata ayıklama modunu etkinleştir"
+
+msgid "Enable detailed logging for troubleshooting. Check error logs for details."
+msgstr "Sorun giderme için ayrıntılı günlüğü etkinleştirin. Ayrıntılar için hata günlüklerini kontrol edin."
+
+msgid "💾 Save Settings"
+msgstr "💾 Ayarları Kaydet"
+
+#: admin/history-page.php
+msgid "📜 Import History"
+msgstr "📜 İçe Aktarma Geçmişi"
+
+msgid "Total Imports"
+msgstr "Toplam İçe Aktarmalar"
+
+msgid "Successful"
+msgstr "Başarılı"
+
+msgid "Failed"
+msgstr "Başarısız"
+
+msgid "Syncs"
+msgstr "Senkronizasyonlar"
+
+msgid "Type"
+msgstr "Tür"
+
+msgid "All Types"
+msgstr "Tüm Türler"
+
+msgid "Import"
+msgstr "İçe Aktarma"
+
+msgid "Sync"
+msgstr "Senkronizasyon"
+
+msgid "Status"
+msgstr "Durum"
+
+msgid "All Status"
+msgstr "Tüm Durumlar"
+
+msgid "Success"
+msgstr "Başarı"
+
+msgid "Error"
+msgstr "Hata"
+
+msgid "Pending"
+msgstr "Beklemede"
+
+msgid "🔍 Filter"
+msgstr "🔍 Filtrele"
+
+msgid "No logs found"
+msgstr "Günlük bulunamadı"
+
+msgid "No import or sync operations have been performed yet."
+msgstr "Henüz import veya senkronizasyon işlemi yapılmadı."
+
+msgid "ID"
+msgstr "Kimlik"
+
+msgid "Action"
+msgstr "İşlem"
+
+msgid "Product"
+msgstr "Ürün"
+
+msgid "Date"
+msgstr "Tarih"
+
+msgid "Actions"
+msgstr "İşlemler"
+
+msgid "Details"
+msgstr "Ayrıntılar"
+
+msgid "Log Details"
+msgstr "Günlük Ayrıntıları"
+
+msgid "Product URL:"
+msgstr "Ürün URL'si:"
+
+msgid "Old Data:"
+msgstr "Eski Veriler:"
+
+msgid "New Data:"
+msgstr "Yeni Veriler:"
+
+#: includes/class-settings.php
+msgid "You do not have permission to sync products."
+msgstr "Ürünleri senkronize etme izniniz yok."
+
+#: includes/class-sync-manager.php
+msgid "No Trendyol URL found for product"
+msgstr "Ürün için Trendyol URL'si bulunamadı"
+
+msgid "No Trendyol URL found for this product."
+msgstr "Bu ürün için Trendyol URL'si bulunamadı."
+
+msgid "Product synchronized successfully"
+msgstr "Ürün başarıyla senkronize edildi"
+
+msgid "Product not found."
+msgstr "Ürün bulunamadı."
+
+msgid "Invalid Trendyol URL."
+msgstr "Geçersiz Trendyol URL'si."
+
+msgid "Product URL updated"
+msgstr "Ürün URL'si güncellendi"
+
+msgid "Synchronized successfully"
+msgstr "Başarıyla senkronize edildi"
+
+msgid "Auto sync completed. Success:"
+msgstr "Otomatik senkronizasyon tamamlandı. Başarı:"
+
+msgid "Failed:"
+msgstr "Başarısız:"

@@ -1,0 +1,14 @@
+{
+    "elbise": {
+        "kargo": 5,
+        "marj": 2
+    },
+    "giyim": {
+        "kargo": 0,
+        "marj": 1
+    },
+    "erkekayakkabi": {
+        "kargo": 5,
+        "marj": 2
+    }
+}
