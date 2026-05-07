@@ -184,29 +184,38 @@ class Trendyol_Scraper {
 		}
 
 		$sources = array(
-			'name'     => '',
-			'price'    => '',
-			'category' => '',
-			'brand'    => '',
-			'sizes'    => '',
-			'images'   => '',
-			'content'  => '',
-			'mode'     => $mode,
+			'name'                => '',
+			'price'               => '',
+			'price_regular'       => '',
+			'price_discounted'    => '',
+			'price_basket'        => '',
+			'price_selected_type' => '',
+			'category'            => '',
+			'brand'               => '',
+			'sizes'               => '',
+			'images'              => '',
+			'content'             => '',
+			'mode'                => $mode,
 		);
 
-		$product_name   = '';
-		$price          = '';
-		$kategori_ad    = '';
-		$brand_name     = '';
-		$sizes          = array();
-		$product_images = array();
-		$product_content= '';
+		$product_name    = '';
+		$kategori_ad     = '';
+		$brand_name      = '';
+		$sizes           = array();
+		$product_images  = array();
+		$product_content = '';
 
-		preg_match_all( '/<script type="application\/ld\+json">(.*?)<\/script>/s', $html, $json_matches );
+		$price_candidates = array(
+			'regular_price'    => null,
+			'discounted_price' => null,
+			'basket_price'     => null,
+		);
+
+		preg_match_all( '/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/si', $html, $json_matches );
 
 		$jsonld_items = array();
 		foreach ( $json_matches[1] as $json_content ) {
-			$data = @json_decode( html_entity_decode( stripslashes( $json_content ) ), true );
+			$data = json_decode( html_entity_decode( stripslashes( $json_content ) ), true );
 			if ( ! is_array( $data ) ) {
 				continue;
 			}
@@ -218,112 +227,144 @@ class Trendyol_Scraper {
 			}
 		}
 
-		if ( in_array( $mode, array( 'auto', 'jsonld_first' ), true ) ) {
-			foreach ( $jsonld_items as $item ) {
-				if ( empty( $brand_name ) && isset( $item['brand'] ) ) {
-					if ( is_array( $item['brand'] ) && ! empty( $item['brand']['name'] ) ) {
-						$brand_name       = $item['brand']['name'];
-						$sources['brand'] = 'jsonld product.brand.name';
-					} elseif ( is_string( $item['brand'] ) && '' !== trim( $item['brand'] ) ) {
-						$brand_name       = $item['brand'];
-						$sources['brand'] = 'jsonld product.brand';
+		foreach ( $jsonld_items as $item ) {
+			if ( empty( $brand_name ) && isset( $item['brand'] ) ) {
+				if ( is_array( $item['brand'] ) && ! empty( $item['brand']['name'] ) ) {
+					$brand_name       = $item['brand']['name'];
+					$sources['brand'] = 'jsonld product.brand.name';
+				} elseif ( is_string( $item['brand'] ) && '' !== trim( $item['brand'] ) ) {
+					$brand_name       = $item['brand'];
+					$sources['brand'] = 'jsonld product.brand';
+				}
+			}
+
+			if ( empty( $kategori_ad ) && isset( $item['category'] ) && ! empty( $item['category'] ) ) {
+				$kategori_ad         = trim( (string) $item['category'] );
+				$sources['category'] = 'jsonld product.category';
+			}
+
+			if ( empty( $product_name ) && ! empty( $item['name'] ) ) {
+				$product_name    = trim( wp_strip_all_tags( (string) $item['name'] ) );
+				$sources['name'] = 'jsonld name';
+			}
+
+			if ( empty( $product_images ) ) {
+				$jsonld_images = $this->extract_images_from_jsonld_item( $item );
+				if ( ! empty( $jsonld_images ) ) {
+					$product_images    = array_merge( $product_images, $jsonld_images );
+					$sources['images'] = 'jsonld image fields';
+				}
+			}
+
+			if ( empty( $product_content ) && isset( $item['additionalProperty'] ) && is_array( $item['additionalProperty'] ) ) {
+				foreach ( $item['additionalProperty'] as $prop ) {
+					$name  = $prop['name'] ?? '';
+					$value = isset( $prop['value'] ) && '' !== $prop['value'] ? $prop['value'] : ( $prop['unitText'] ?? '' );
+					if ( $name && $value ) {
+						$product_content .= '<b>' . esc_html( $name ) . ':</b> ' . esc_html( $value ) . '<br>';
 					}
 				}
-
-				if ( empty( $kategori_ad ) && isset( $item['@type'] ) && strtolower( $item['@type'] ) === 'product' ) {
-					if ( isset( $item['category'] ) && ! empty( $item['category'] ) ) {
-						$kategori_ad         = $item['category'];
-						$sources['category'] = 'jsonld product.category';
-					}
-				}
-
-				if ( empty( $product_images ) && isset( $item['image']['contentUrl'] ) && is_array( $item['image']['contentUrl'] ) ) {
-					$product_images    = array_merge( $product_images, $item['image']['contentUrl'] );
-					$sources['images'] = 'jsonld image.contentUrl';
-				}
-
-				if ( empty( $product_images ) && isset( $item['image'] ) && is_array( $item['image'] ) && isset( $item['image'][0] ) ) {
-					$product_images    = array_merge( $product_images, $item['image'] );
-					$sources['images'] = 'jsonld image array';
-				}
-
-				if ( empty( $product_content ) && isset( $item['additionalProperty'] ) && is_array( $item['additionalProperty'] ) ) {
-					foreach ( $item['additionalProperty'] as $prop ) {
-						$name  = $prop['name'] ?? '';
-						$value = isset( $prop['value'] ) && '' !== $prop['value'] ? $prop['value'] : ( $prop['unitText'] ?? '' );
-						if ( $name && $value ) {
-							$product_content .= '<b>' . esc_html( $name ) . ':</b> ' . esc_html( $value ) . '<br>';
-						}
-					}
-					if ( ! empty( $product_content ) ) {
-						$sources['content'] = 'jsonld additionalProperty';
-					}
-				}
-
-				if ( empty( $brand_name ) && isset( $item['hasVariant'] ) && is_array( $item['hasVariant'] ) ) {
-					foreach ( $item['hasVariant'] as $variant_item ) {
-						if ( is_array( $variant_item ) && isset( $variant_item['brand'] ) ) {
-							if ( is_array( $variant_item['brand'] ) && ! empty( $variant_item['brand']['name'] ) ) {
-								$brand_name       = $variant_item['brand']['name'];
-								$sources['brand'] = 'jsonld hasVariant.brand.name';
-								break;
-							} elseif ( is_string( $variant_item['brand'] ) && '' !== trim( $variant_item['brand'] ) ) {
-								$brand_name       = $variant_item['brand'];
-								$sources['brand'] = 'jsonld hasVariant.brand';
-								break;
-							}
-						}
-					}
+				if ( ! empty( $product_content ) ) {
+					$sources['content'] = 'jsonld additionalProperty';
 				}
 			}
 		}
 
-		if ( in_array( $mode, array( 'auto', 'standard' ), true ) ) {
-			if ( preg_match( '/"product_pname":"(.*?)"/', $html, $matches ) ) {
-				$product_name    = html_entity_decode( wp_strip_all_tags( stripslashes( $matches[1] ) ), ENT_QUOTES, 'UTF-8' );
-				$sources['name'] = 'product_pname regex';
-			}
+		$envoy_data      = $this->extract_envoy_product_data( $html );
+		$datalayer_data  = $this->extract_product_datalayer_data( $html );
+		$envoy_prices    = $this->extract_prices_from_envoy_data( $envoy_data );
+		$datalayer_prices= $this->extract_prices_from_datalayer_data( $datalayer_data );
+		$envoy_images    = $this->extract_images_from_envoy_data( $envoy_data );
 
-			if ( preg_match( '/<span[^>]*class="[^"]*(?:discounted|prc-slg|prc-dsc|prc-org)[^"]*"[^>]*>([\d\.,]+)\s*TL<\/span>/i', $html, $matches ) ) {
-				$price            = str_replace( ',', '.', $matches[1] );
-				$sources['price'] = 'price span regex';
-			} elseif ( preg_match( '/"price"\s*:\s*"([\d\.]+)"/', $html, $m2 ) ) {
-				$price            = $m2[1];
-				$sources['price'] = 'price json regex';
-			} elseif ( preg_match( '/<meta[^>]*itemprop="price"[^>]*content="([\d\.]+)"/i', $html, $m3 ) ) {
-				$price            = $m3[1];
-				$sources['price'] = 'meta itemprop price';
-			}
-
-			if ( empty( $kategori_ad ) && preg_match_all( '#<a[^>]+class=".*?breadcrumb-link.*?"[^>]*>([^<]+)</a>#i', $html, $breads ) ) {
-				$kategori_ad         = end( $breads[1] );
-				$sources['category'] = 'breadcrumb regex';
-			}
-
-			if ( preg_match_all( '/<img[^>]+src="([^"]+)"[^>]*class="[^"]*gallery-item[^"]*"[^>]*>/i', $html, $img_matches ) ) {
-				$product_images = array_merge( $product_images, $img_matches[1] );
-				if ( empty( $sources['images'] ) && ! empty( $img_matches[1] ) ) {
-					$sources['images'] = 'gallery image regex';
-				}
-			}
+		if ( ! empty( $envoy_data['product']['name'] ) ) {
+			$product_name    = trim( (string) $envoy_data['product']['name'] );
+			$sources['name'] = 'envoy product.name';
 		}
 
-		if ( in_array( $mode, array( 'auto', 'fallback_only' ), true ) ) {
-			if ( empty( $product_name ) && preg_match( '/<title>(.*?)<\/title>/is', $html, $title_match ) ) {
-				$product_name    = trim( wp_strip_all_tags( html_entity_decode( $title_match[1], ENT_QUOTES, 'UTF-8' ) ) );
-				$product_name    = preg_replace( '/\s*-\s*Trendyol.*$/i', '', $product_name );
-				$sources['name'] = 'title tag fallback';
-			}
+		if ( empty( $product_name ) && ! empty( $datalayer_data['product_pname'] ) ) {
+			$product_name    = trim( (string) $datalayer_data['product_pname'] );
+			$sources['name'] = 'product detail datalayer product_pname';
+		}
 
-			if ( empty( $price ) && preg_match( '/<meta[^>]*itemprop="price"[^>]*content="([\d\.]+)"/i', $html, $m3 ) ) {
-				$price            = $m3[1];
-				$sources['price'] = 'meta itemprop price';
-			}
+		if ( empty( $brand_name ) && ! empty( $envoy_data['product']['brand']['name'] ) ) {
+			$brand_name       = trim( (string) $envoy_data['product']['brand']['name'] );
+			$sources['brand'] = 'envoy product.brand.name';
+		}
 
-			if ( empty( $kategori_ad ) && preg_match_all( '#<a[^>]+class=".*?breadcrumb-link.*?"[^>]*>([^<]+)</a>#i', $html, $breads ) ) {
-				$kategori_ad         = end( $breads[1] );
-				$sources['category'] = 'breadcrumb regex';
-			}
+		if ( empty( $brand_name ) && ! empty( $datalayer_data['product_brand'] ) ) {
+			$brand_name       = trim( (string) $datalayer_data['product_brand'] );
+			$sources['brand'] = 'product detail datalayer product_brand';
+		}
+
+		if ( empty( $kategori_ad ) && ! empty( $envoy_data['product']['category']['name'] ) ) {
+			$kategori_ad         = trim( (string) $envoy_data['product']['category']['name'] );
+			$sources['category'] = 'envoy product.category.name';
+		}
+
+		if ( empty( $kategori_ad ) && ! empty( $datalayer_data['product_categoryname'] ) ) {
+			$kategori_ad         = trim( (string) $datalayer_data['product_categoryname'] );
+			$sources['category'] = 'product detail datalayer product_categoryname';
+		}
+
+		if ( null !== $envoy_prices['basket_price'] ) {
+			$price_candidates['basket_price'] = $envoy_prices['basket_price'];
+			$sources['price_basket']          = $envoy_prices['sources']['basket_price'] ?? 'envoy basket';
+		}
+		if ( null !== $envoy_prices['discounted_price'] ) {
+			$price_candidates['discounted_price'] = $envoy_prices['discounted_price'];
+			$sources['price_discounted']          = $envoy_prices['sources']['discounted_price'] ?? 'envoy discounted';
+		}
+		if ( null !== $envoy_prices['regular_price'] ) {
+			$price_candidates['regular_price'] = $envoy_prices['regular_price'];
+			$sources['price_regular']          = $envoy_prices['sources']['regular_price'] ?? 'envoy regular';
+		}
+
+		if ( null === $price_candidates['basket_price'] && null !== $datalayer_prices['basket_price'] ) {
+			$price_candidates['basket_price'] = $datalayer_prices['basket_price'];
+			$sources['price_basket']          = $datalayer_prices['sources']['basket_price'] ?? 'datalayer basket';
+		}
+		if ( null === $price_candidates['discounted_price'] && null !== $datalayer_prices['discounted_price'] ) {
+			$price_candidates['discounted_price'] = $datalayer_prices['discounted_price'];
+			$sources['price_discounted']          = $datalayer_prices['sources']['discounted_price'] ?? 'datalayer discounted';
+		}
+		if ( null === $price_candidates['regular_price'] && null !== $datalayer_prices['regular_price'] ) {
+			$price_candidates['regular_price'] = $datalayer_prices['regular_price'];
+			$sources['price_regular']          = $datalayer_prices['sources']['regular_price'] ?? 'datalayer regular';
+		}
+
+		if ( ! empty( $envoy_images ) ) {
+			$product_images    = array_merge( $product_images, $envoy_images );
+			$sources['images'] = empty( $sources['images'] ) ? 'envoy product.images' : $sources['images'];
+		}
+
+		$html_prices = $this->extract_prices_from_html_markup( $html );
+		if ( null === $price_candidates['basket_price'] && null !== $html_prices['basket_price'] ) {
+			$price_candidates['basket_price'] = $html_prices['basket_price'];
+			$sources['price_basket']          = $html_prices['sources']['basket_price'] ?? 'html basket';
+		}
+		if ( null === $price_candidates['discounted_price'] && null !== $html_prices['discounted_price'] ) {
+			$price_candidates['discounted_price'] = $html_prices['discounted_price'];
+			$sources['price_discounted']          = $html_prices['sources']['discounted_price'] ?? 'html discounted';
+		}
+		if ( null === $price_candidates['regular_price'] && null !== $html_prices['regular_price'] ) {
+			$price_candidates['regular_price'] = $html_prices['regular_price'];
+			$sources['price_regular']          = $html_prices['sources']['regular_price'] ?? 'html regular';
+		}
+
+		if ( empty( $product_name ) && preg_match( '/"product_pname":"(.*?)"/', $html, $matches ) ) {
+			$product_name    = html_entity_decode( wp_strip_all_tags( stripslashes( $matches[1] ) ), ENT_QUOTES, 'UTF-8' );
+			$sources['name'] = 'product_pname regex';
+		}
+
+		if ( empty( $product_name ) && preg_match( '/<title>(.*?)<\/title>/is', $html, $title_match ) ) {
+			$product_name    = trim( wp_strip_all_tags( html_entity_decode( $title_match[1], ENT_QUOTES, 'UTF-8' ) ) );
+			$product_name    = preg_replace( '/\s*-\s*Trendyol.*$/i', '', $product_name );
+			$sources['name'] = 'title tag fallback';
+		}
+
+		if ( empty( $kategori_ad ) && preg_match_all( '#<a[^>]+class=".*?breadcrumb-link.*?"[^>]*>([^<]+)</a>#i', $html, $breads ) ) {
+			$kategori_ad         = end( $breads[1] );
+			$sources['category'] = 'breadcrumb regex';
 		}
 
 		if ( function_exists( 'trendyol_extract_variants_from_html' ) ) {
@@ -334,38 +375,407 @@ class Trendyol_Scraper {
 						$sizes[] = $variant['value'];
 					}
 				}
-				$sizes = array_values( array_unique( $sizes ) );
-				if ( ! empty( $sizes ) ) {
-					$sources['sizes'] = 'trendyol_extract_variants_from_html';
-				}
 			}
 		}
 
+		if ( empty( $sizes ) && ! empty( $envoy_data['product']['variants'] ) && is_array( $envoy_data['product']['variants'] ) ) {
+			foreach ( $envoy_data['product']['variants'] as $variant ) {
+				if ( ! empty( $variant['value'] ) ) {
+					$sizes[] = $variant['value'];
+				}
+			}
+			if ( ! empty( $sizes ) ) {
+				$sources['sizes'] = 'envoy product.variants';
+			}
+		}
+
+		$sizes = array_values( array_unique( array_filter( $sizes ) ) );
+
+		if ( empty( $product_images ) ) {
+			$dom_images = $this->extract_images_from_html( $html );
+			if ( ! empty( $dom_images ) ) {
+				$product_images    = array_merge( $product_images, $dom_images );
+				$sources['images'] = empty( $sources['images'] ) ? 'html image extraction' : $sources['images'];
+			}
+		}
+
+		$selected_price      = null;
+		$selected_price_type = '';
+
+		if ( null !== $price_candidates['basket_price'] ) {
+			$selected_price      = $price_candidates['basket_price'];
+			$selected_price_type = 'basket_price';
+		} elseif ( null !== $price_candidates['discounted_price'] ) {
+			$selected_price      = $price_candidates['discounted_price'];
+			$selected_price_type = 'discounted_price';
+		} elseif ( null !== $price_candidates['regular_price'] ) {
+			$selected_price      = $price_candidates['regular_price'];
+			$selected_price_type = 'regular_price';
+		}
+
+		$product_images = $this->normalize_image_urls( $product_images );
 		$product_images = array_values( array_unique( array_filter( $product_images ) ) );
-		$price          = floatval( $price );
 
 		if ( empty( $product_name ) ) {
 			return new WP_Error( 'parse_name_failed', __( 'Ürün adı çözülemedi.', 'trendyol-woocommerce-importer' ) );
 		}
 
-		if ( $price <= 0 ) {
+		if ( null === $selected_price || $selected_price <= 0 ) {
 			return new WP_Error( 'parse_price_failed', __( 'Ürün fiyatı çözülemedi.', 'trendyol-woocommerce-importer' ) );
 		}
 
+		$sources['price']               = $selected_price_type ? ( $sources[ 'price_' . str_replace( '_price', '', $selected_price_type ) ] ?? $selected_price_type ) : '';
+		$sources['price_selected_type'] = $selected_price_type;
+
 		$this->product_data = array(
-			'name'          => $product_name,
-			'price'         => $price,
-			'sizes'         => $sizes,
-			'images'        => $product_images,
-			'content'       => $product_content,
-			'url'           => $this->url,
-			'category'      => $kategori_ad,
-			'brand'         => $brand_name,
-			'__sources'     => $sources,
-			'__fetch_debug' => $this->fetch_debug,
+			'name'             => $product_name,
+			'price'            => (float) $selected_price,
+			'price_type'       => $selected_price_type,
+			'price_candidates' => $price_candidates,
+			'sizes'            => $sizes,
+			'images'           => $product_images,
+			'content'          => $product_content,
+			'url'              => $this->url,
+			'category'         => $kategori_ad,
+			'brand'            => $brand_name,
+			'__sources'        => $sources,
+			'__fetch_debug'    => $this->fetch_debug,
 		);
 
 		return $this->product_data;
+	}
+
+	private function normalize_price_value( $raw_price ) {
+		if ( is_null( $raw_price ) || '' === $raw_price ) {
+			return null;
+		}
+
+		$raw_price = wp_strip_all_tags( (string) $raw_price );
+		$raw_price = html_entity_decode( $raw_price, ENT_QUOTES, 'UTF-8' );
+		$raw_price = str_replace( array( 'TL', '₺', ' ' ), '', $raw_price );
+		$raw_price = preg_replace( '/[^\d\,\.]/u', '', $raw_price );
+
+		if ( '' === $raw_price ) {
+			return null;
+		}
+
+		if ( false !== strpos( $raw_price, ',' ) ) {
+			$raw_price = str_replace( '.', '', $raw_price );
+			$raw_price = str_replace( ',', '.', $raw_price );
+		}
+
+		$value = (float) $raw_price;
+
+		return $value > 0 ? $value : null;
+	}
+
+	private function extract_first_json_object( $html, $marker ) {
+		$pos = strpos( $html, $marker );
+		if ( false === $pos ) {
+			return null;
+		}
+
+		$start = strpos( $html, '{', $pos );
+		if ( false === $start ) {
+			return null;
+		}
+
+		$length    = strlen( $html );
+		$depth     = 0;
+		$in_string = false;
+		$escape    = false;
+
+		for ( $i = $start; $i < $length; $i++ ) {
+			$char = $html[ $i ];
+
+			if ( $escape ) {
+				$escape = false;
+				continue;
+			}
+
+			if ( '\\' === $char ) {
+				$escape = true;
+				continue;
+			}
+
+			if ( '"' === $char ) {
+				$in_string = ! $in_string;
+				continue;
+			}
+
+			if ( $in_string ) {
+				continue;
+			}
+
+			if ( '{' === $char ) {
+				$depth++;
+			} elseif ( '}' === $char ) {
+				$depth--;
+				if ( 0 === $depth ) {
+					return substr( $html, $start, $i - $start + 1 );
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private function extract_envoy_product_data( $html ) {
+		$markers = array(
+			'window["__envoy__PROPS"]=',
+			'window["__envoy_product-detail__PROPS"]=',
+			'window["__envoy_product-image-gallery__PROPS"]=',
+		);
+
+		foreach ( $markers as $marker ) {
+			$json = $this->extract_first_json_object( $html, $marker );
+			if ( empty( $json ) ) {
+				continue;
+			}
+
+			$data = json_decode( $json, true );
+			if ( is_array( $data ) ) {
+				return $data;
+			}
+		}
+
+		return array();
+	}
+
+	private function extract_product_datalayer_data( $html ) {
+		$marker = 'PuzzleJs.emit("4", "envoy", "__PRODUCT_DETAIL__DATALAYER", ';
+		$pos    = strpos( $html, $marker );
+
+		if ( false === $pos ) {
+			return array();
+		}
+
+		$start = strpos( $html, '{', $pos );
+		if ( false === $start ) {
+			return array();
+		}
+
+		$length    = strlen( $html );
+		$depth     = 0;
+		$in_string = false;
+		$escape    = false;
+
+		for ( $i = $start; $i < $length; $i++ ) {
+			$char = $html[ $i ];
+
+			if ( $escape ) {
+				$escape = false;
+				continue;
+			}
+
+			if ( '\\' === $char ) {
+				$escape = true;
+				continue;
+			}
+
+			if ( '"' === $char ) {
+				$in_string = ! $in_string;
+				continue;
+			}
+
+			if ( $in_string ) {
+				continue;
+			}
+
+			if ( '{' === $char ) {
+				$depth++;
+			} elseif ( '}' === $char ) {
+				$depth--;
+				if ( 0 === $depth ) {
+					$json = substr( $html, $start, $i - $start + 1 );
+					$data = json_decode( $json, true );
+					return is_array( $data ) ? $data : array();
+				}
+			}
+		}
+
+		return array();
+	}
+
+	private function extract_prices_from_envoy_data( $envoy_data ) {
+		$results = array(
+			'regular_price'    => null,
+			'discounted_price' => null,
+			'basket_price'     => null,
+			'sources'          => array(),
+		);
+
+		if ( empty( $envoy_data['product'] ) || ! is_array( $envoy_data['product'] ) ) {
+			return $results;
+		}
+
+		$product = $envoy_data['product'];
+
+		if ( ! empty( $product['winnerVariant']['price'] ) && is_array( $product['winnerVariant']['price'] ) ) {
+			$price_data = $product['winnerVariant']['price'];
+
+			if ( isset( $price_data['discountedPrice']['value'] ) ) {
+				$results['basket_price'] = $this->normalize_price_value( $price_data['discountedPrice']['value'] );
+				$results['sources']['basket_price'] = 'envoy product.winnerVariant.price.discountedPrice.value';
+			}
+
+			if ( isset( $price_data['sellingPrice']['value'] ) ) {
+				$results['discounted_price'] = $this->normalize_price_value( $price_data['sellingPrice']['value'] );
+				$results['sources']['discounted_price'] = 'envoy product.winnerVariant.price.sellingPrice.value';
+			}
+
+			if ( isset( $price_data['originalPrice']['value'] ) ) {
+				$results['regular_price'] = $this->normalize_price_value( $price_data['originalPrice']['value'] );
+				$results['sources']['regular_price'] = 'envoy product.winnerVariant.price.originalPrice.value';
+			}
+		}
+
+		return $results;
+	}
+
+	private function extract_prices_from_datalayer_data( $data ) {
+		$results = array(
+			'regular_price'    => null,
+			'discounted_price' => null,
+			'basket_price'     => null,
+			'sources'          => array(),
+		);
+
+		if ( empty( $data ) || ! is_array( $data ) ) {
+			return $results;
+		}
+
+		if ( isset( $data['product_discounted_price'] ) ) {
+			$results['basket_price'] = $this->normalize_price_value( $data['product_discounted_price'] );
+			$results['sources']['basket_price'] = 'product detail datalayer product_discounted_price';
+		}
+
+		if ( isset( $data['product_price'] ) ) {
+			$results['discounted_price'] = $this->normalize_price_value( $data['product_price'] );
+			$results['sources']['discounted_price'] = 'product detail datalayer product_price';
+		}
+
+		if ( isset( $data['product_original_price'] ) ) {
+			$results['regular_price'] = $this->normalize_price_value( $data['product_original_price'] );
+			$results['sources']['regular_price'] = 'product detail datalayer product_original_price';
+		}
+
+		return $results;
+	}
+
+	private function extract_prices_from_html_markup( $html ) {
+		$results = array(
+			'regular_price'    => null,
+			'discounted_price' => null,
+			'basket_price'     => null,
+			'sources'          => array(),
+		);
+
+		if ( preg_match( '/<p[^>]*class="[^"]*new-price[^"]*"[^>]*>(.*?)<\/p>/is', $html, $m ) ) {
+			$results['basket_price'] = $this->normalize_price_value( wp_strip_all_tags( $m[1] ) );
+			$results['sources']['basket_price'] = 'html .new-price';
+		}
+
+		if ( preg_match( '/<p[^>]*class="[^"]*old-price[^"]*"[^>]*>(.*?)<\/p>/is', $html, $m ) ) {
+			$results['discounted_price'] = $this->normalize_price_value( wp_strip_all_tags( $m[1] ) );
+			$results['sources']['discounted_price'] = 'html .old-price';
+		}
+
+		return $results;
+	}
+
+	private function extract_images_from_envoy_data( $envoy_data ) {
+		$images = array();
+
+		if ( ! empty( $envoy_data['product']['images'] ) && is_array( $envoy_data['product']['images'] ) ) {
+			$images = array_merge( $images, $envoy_data['product']['images'] );
+		}
+
+		return $this->normalize_image_urls( $images );
+	}
+
+	private function extract_images_from_jsonld_item( $item ) {
+		$images = array();
+
+		if ( ! is_array( $item ) ) {
+			return $images;
+		}
+
+		if ( isset( $item['image'] ) ) {
+			if ( is_string( $item['image'] ) ) {
+				$images[] = $item['image'];
+			} elseif ( is_array( $item['image'] ) ) {
+				if ( isset( $item['image']['contentUrl'] ) ) {
+					if ( is_array( $item['image']['contentUrl'] ) ) {
+						$images = array_merge( $images, $item['image']['contentUrl'] );
+					} else {
+						$images[] = $item['image']['contentUrl'];
+					}
+				} else {
+					foreach ( $item['image'] as $image_item ) {
+						if ( is_string( $image_item ) ) {
+							$images[] = $image_item;
+						} elseif ( is_array( $image_item ) && ! empty( $image_item['contentUrl'] ) ) {
+							$images[] = $image_item['contentUrl'];
+						}
+					}
+				}
+			}
+		}
+
+		return $this->normalize_image_urls( $images );
+	}
+
+	private function extract_images_from_html( $html ) {
+		$images = array();
+
+		if ( preg_match_all( '/https?:\/\/[^"\']+cdn\.dsmcdn\.com[^"\']+\.(?:jpg|jpeg|png|webp)(?:\?[^"\']*)?/i', $html, $matches ) ) {
+			foreach ( $matches[0] as $match ) {
+				$images[] = $match;
+			}
+		}
+
+		if ( preg_match_all( '/<img[^>]+(?:src|data-src|data-original-src|data-image)="([^"]+)"/i', $html, $matches ) ) {
+			foreach ( $matches[1] as $match ) {
+				$images[] = $match;
+			}
+		}
+
+		return $this->normalize_image_urls( $images );
+	}
+
+	private function normalize_image_urls( $images ) {
+		$normalized = array();
+
+		foreach ( (array) $images as $image_url ) {
+			$image_url = html_entity_decode( trim( (string) $image_url ), ENT_QUOTES, 'UTF-8' );
+			if ( '' === $image_url ) {
+				continue;
+			}
+
+			if ( 0 === strpos( $image_url, '//' ) ) {
+				$image_url = 'https:' . $image_url;
+			}
+
+			$image_url = str_replace( '\u002F', '/', $image_url );
+			$image_url = str_replace( '\\/', '/', $image_url );
+
+			if ( false === strpos( $image_url, 'http' ) ) {
+				continue;
+			}
+
+			if ( false === strpos( $image_url, 'cdn.dsmcdn.com' ) ) {
+				continue;
+			}
+
+			if ( false !== stripos( $image_url, 'product-placeholder' ) || false !== stripos( $image_url, 'placeholder-v2' ) ) {
+				continue;
+			}
+
+			$normalized[] = esc_url_raw( $image_url );
+		}
+
+		return array_values( array_unique( array_filter( $normalized ) ) );
 	}
 
 	public function get_product_data() {

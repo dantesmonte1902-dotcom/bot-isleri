@@ -39,6 +39,7 @@ class Trendyol_Scraper_Diagnostic_Service {
 				'jsonld_blocks'  => array(),
 				'regex_tests'    => array(),
 				'fetch_debug'    => array(),
+				'price_debug'    => array(),
 			);
 		}
 
@@ -67,6 +68,7 @@ class Trendyol_Scraper_Diagnostic_Service {
 				'jsonld_blocks'  => array(),
 				'regex_tests'    => array(),
 				'fetch_debug'    => $fetch_debug,
+				'price_debug'    => array(),
 			);
 		}
 
@@ -93,6 +95,7 @@ class Trendyol_Scraper_Diagnostic_Service {
 			'jsonld_blocks'  => $jsonld_blocks,
 			'regex_tests'    => $regex_tests,
 			'fetch_debug'    => $fetch_debug,
+			'price_debug'    => array(),
 		);
 
 		if ( is_wp_error( $parsed ) ) {
@@ -104,24 +107,42 @@ class Trendyol_Scraper_Diagnostic_Service {
 			return $result;
 		}
 
-		$sources  = isset( $parsed['__sources'] ) && is_array( $parsed['__sources'] ) ? $parsed['__sources'] : array();
-		$name     = isset( $parsed['name'] ) ? trim( (string) $parsed['name'] ) : '';
-		$price    = isset( $parsed['price'] ) ? (float) $parsed['price'] : 0;
-		$category = isset( $parsed['category'] ) ? trim( (string) $parsed['category'] ) : '';
-		$brand    = isset( $parsed['brand'] ) ? trim( (string) $parsed['brand'] ) : '';
-		$sizes    = isset( $parsed['sizes'] ) && is_array( $parsed['sizes'] ) ? $parsed['sizes'] : array();
-		$images   = isset( $parsed['images'] ) && is_array( $parsed['images'] ) ? $parsed['images'] : array();
-		$content  = isset( $parsed['content'] ) ? trim( wp_strip_all_tags( (string) $parsed['content'] ) ) : '';
+		$sources          = isset( $parsed['__sources'] ) && is_array( $parsed['__sources'] ) ? $parsed['__sources'] : array();
+		$name             = isset( $parsed['name'] ) ? trim( (string) $parsed['name'] ) : '';
+		$price            = isset( $parsed['price'] ) ? (float) $parsed['price'] : 0;
+		$category         = isset( $parsed['category'] ) ? trim( (string) $parsed['category'] ) : '';
+		$brand            = isset( $parsed['brand'] ) ? trim( (string) $parsed['brand'] ) : '';
+		$sizes            = isset( $parsed['sizes'] ) && is_array( $parsed['sizes'] ) ? $parsed['sizes'] : array();
+		$images           = isset( $parsed['images'] ) && is_array( $parsed['images'] ) ? $parsed['images'] : array();
+		$content          = isset( $parsed['content'] ) ? trim( wp_strip_all_tags( (string) $parsed['content'] ) ) : '';
+		$price_candidates = isset( $parsed['price_candidates'] ) && is_array( $parsed['price_candidates'] ) ? $parsed['price_candidates'] : array();
+		$price_type       = isset( $parsed['price_type'] ) ? (string) $parsed['price_type'] : '';
 
 		$result['field_sources'] = array(
-			'name'     => $sources['name'] ?? '',
-			'price'    => $sources['price'] ?? '',
-			'category' => $sources['category'] ?? '',
-			'brand'    => $sources['brand'] ?? '',
-			'sizes'    => $sources['sizes'] ?? '',
-			'images'   => $sources['images'] ?? '',
-			'content'  => $sources['content'] ?? '',
-			'mode'     => $sources['mode'] ?? $mode,
+			'name'                => $sources['name'] ?? '',
+			'price'               => $sources['price'] ?? '',
+			'price_regular'       => $sources['price_regular'] ?? '',
+			'price_discounted'    => $sources['price_discounted'] ?? '',
+			'price_basket'        => $sources['price_basket'] ?? '',
+			'price_selected_type' => $sources['price_selected_type'] ?? '',
+			'category'            => $sources['category'] ?? '',
+			'brand'               => $sources['brand'] ?? '',
+			'sizes'               => $sources['sizes'] ?? '',
+			'images'              => $sources['images'] ?? '',
+			'content'             => $sources['content'] ?? '',
+			'mode'                => $sources['mode'] ?? $mode,
+		);
+
+		$result['price_debug'] = array(
+			'regular_price'       => $price_candidates['regular_price'] ?? null,
+			'discounted_price'    => $price_candidates['discounted_price'] ?? null,
+			'basket_price'        => $price_candidates['basket_price'] ?? null,
+			'selected_price'      => $price,
+			'selected_price_type' => $price_type,
+			'regular_source'      => $sources['price_regular'] ?? '',
+			'discounted_source'   => $sources['price_discounted'] ?? '',
+			'basket_source'       => $sources['price_basket'] ?? '',
+			'selected_source'     => $sources['price'] ?? '',
 		);
 
 		$result['fields'] = array(
@@ -215,12 +236,16 @@ class Trendyol_Scraper_Diagnostic_Service {
 
 	private function extract_debug_signals( $html ) {
 		return array(
-			'html_length'            => strlen( (string) $html ),
-			'has_product_pname'      => (bool) preg_match( '/"product_pname":"/', $html ),
-			'has_price_keyword'      => (bool) preg_match( '/"price"\s*:|prc-slg|prc-dsc|discounted/i', $html ),
-			'has_meta_price'         => (bool) preg_match( '/itemprop="price"/i', $html ),
-			'has_jsonld'             => (bool) preg_match( '/application\/ld\+json/i', $html ),
-			'has_breadcrumb_keyword' => (bool) preg_match( '/breadcrumb-link/i', $html ),
+			'html_length'                => strlen( (string) $html ),
+			'has_product_pname'          => (bool) preg_match( '/"product_pname":"/', $html ),
+			'has_price_keyword'          => (bool) preg_match( '/"price"\s*:|prc-slg|prc-dsc|discounted|basketPrice|discountedPrice|originalPrice|sellingPrice|product_price|product_discounted_price/i', $html ),
+			'has_meta_price'             => (bool) preg_match( '/itemprop="price"/i', $html ),
+			'has_jsonld'                 => (bool) preg_match( '/application\/ld\+json/i', $html ),
+			'has_envoy_props'            => (bool) preg_match( '/__envoy__PROPS|__envoy_product-detail__PROPS|__envoy_product-image-gallery__PROPS/i', $html ),
+			'has_product_detail_dl'      => (bool) preg_match( '/__PRODUCT_DETAIL__DATALAYER/i', $html ),
+			'has_html_campaign_price'    => (bool) preg_match( '/campaign-price|new-price|old-price/i', $html ),
+			'has_breadcrumb_keyword'     => (bool) preg_match( '/breadcrumb-link/i', $html ),
+			'has_image_keyword'          => (bool) preg_match( '/cdn\.dsmcdn\.com|product-image-gallery|contentUrl|images/i', $html ),
 		);
 	}
 
@@ -233,21 +258,33 @@ class Trendyol_Scraper_Diagnostic_Service {
 			'value'   => '',
 		);
 
-		$tests['price_span'] = array(
-			'label'   => 'price span regex',
-			'matched' => (bool) preg_match( '/<span[^>]*class="[^"]*(?:discounted|prc-slg|prc-dsc|prc-org)[^"]*"[^>]*>([\d\.,]+)\s*TL<\/span>/i', $html ),
+		$tests['product_discounted_price'] = array(
+			'label'   => 'product_discounted_price regex',
+			'matched' => (bool) preg_match( '/"product_discounted_price"\s*:\s*([\d\.]+)/i', $html ),
 			'value'   => '',
 		);
 
-		$tests['price_json'] = array(
-			'label'   => 'price json regex',
-			'matched' => (bool) preg_match( '/"price"\s*:\s*"([\d\.]+)"/', $html ),
+		$tests['product_price'] = array(
+			'label'   => 'product_price regex',
+			'matched' => (bool) preg_match( '/"product_price"\s*:\s*([\d\.]+)/i', $html ),
 			'value'   => '',
 		);
 
-		$tests['price_meta'] = array(
-			'label'   => 'meta price regex',
-			'matched' => (bool) preg_match( '/<meta[^>]*itemprop="price"[^>]*content="([\d\.]+)"/i', $html ),
+		$tests['product_original_price'] = array(
+			'label'   => 'product_original_price regex',
+			'matched' => (bool) preg_match( '/"product_original_price"\s*:\s*([\d\.]+)/i', $html ),
+			'value'   => '',
+		);
+
+		$tests['winner_variant_discounted'] = array(
+			'label'   => 'winnerVariant discountedPrice regex',
+			'matched' => (bool) preg_match( '/"discountedPrice"\s*:\s*\{"value":([\d\.]+)/i', $html ),
+			'value'   => '',
+		);
+
+		$tests['html_new_price'] = array(
+			'label'   => 'html new-price regex',
+			'matched' => (bool) preg_match( '/class="[^"]*new-price[^"]*"/i', $html ),
 			'value'   => '',
 		);
 

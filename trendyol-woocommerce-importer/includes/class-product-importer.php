@@ -18,14 +18,16 @@ class Trendyol_Product_Importer {
 	}
 
 	public function import() {
-		$product_name = $this->product_data['name'] ?? 'Trendyol Ürünü';
-		$tl_fiyat     = $this->product_data['price'] ?? 0;
-		$sizes        = $this->product_data['sizes'] ?? array();
-		$images       = $this->product_data['images'] ?? array();
-		$content      = $this->product_data['content'] ?? '';
-		$trendyol_url = $this->product_data['url'] ?? '';
-		$kategori_ad  = $this->product_data['category'] ?? '';
-		$brand_name   = $this->product_data['brand'] ?? '';
+		$product_name      = $this->product_data['name'] ?? 'Trendyol Ürünü';
+		$tl_fiyat          = $this->product_data['price'] ?? 0;
+		$sizes             = $this->product_data['sizes'] ?? array();
+		$images            = $this->product_data['images'] ?? array();
+		$content           = $this->product_data['content'] ?? '';
+		$trendyol_url      = $this->product_data['url'] ?? '';
+		$kategori_ad       = $this->product_data['category'] ?? '';
+		$brand_name        = $this->product_data['brand'] ?? '';
+		$price_type        = $this->product_data['price_type'] ?? '';
+		$price_candidates  = $this->product_data['price_candidates'] ?? array();
 
 		$product_name = trim( wp_strip_all_tags( $product_name ) );
 		$tl_fiyat     = floatval( $tl_fiyat );
@@ -111,6 +113,24 @@ class Trendyol_Product_Importer {
 
 		if ( ! empty( $brand_name ) ) {
 			update_post_meta( $product_id, 'trendyol_brand_name', sanitize_text_field( $brand_name ) );
+		}
+
+		if ( ! empty( $price_type ) ) {
+			update_post_meta( $product_id, 'trendyol_price_type', sanitize_text_field( $price_type ) );
+		}
+
+		if ( is_array( $price_candidates ) ) {
+			if ( isset( $price_candidates['basket_price'] ) && null !== $price_candidates['basket_price'] ) {
+				update_post_meta( $product_id, 'trendyol_price_basket_tl', (float) $price_candidates['basket_price'] );
+			}
+
+			if ( isset( $price_candidates['discounted_price'] ) && null !== $price_candidates['discounted_price'] ) {
+				update_post_meta( $product_id, 'trendyol_price_discounted_tl', (float) $price_candidates['discounted_price'] );
+			}
+
+			if ( isset( $price_candidates['regular_price'] ) && null !== $price_candidates['regular_price'] ) {
+				update_post_meta( $product_id, 'trendyol_price_regular_tl', (float) $price_candidates['regular_price'] );
+			}
 		}
 
 		if ( ! empty( $sizes ) && is_array( $sizes ) ) {
@@ -249,7 +269,7 @@ class Trendyol_Product_Importer {
 				continue;
 			}
 
-			$filename   = 'trendyol-' . $product_id . '-' . $key . '.jpg';
+			$filename   = $product_id . '-' . $key . '.jpg';
 			$upload_dir = wp_upload_dir();
 			$file_path  = $upload_dir['path'] . '/' . $filename;
 
