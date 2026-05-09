@@ -70,14 +70,10 @@ class Trendyol_Product_Importer {
 		$euro_kur = get_trendyol_euro_kuru();
 		$euro_kur = ( is_numeric( $euro_kur ) && (float) $euro_kur > 0 ) ? (float) $euro_kur : 32.0;
 
-		$rsd_kur = get_trendyol_rsd_kuru();
-		$rsd_kur = ( is_numeric( $rsd_kur ) && (float) $rsd_kur > 0 ) ? (float) $rsd_kur : 117.38;
-
-		$new_price = trendyol_final_fiyat_rsd(
+		$new_price = trendyol_active_currency_price(
 			$tl_fiyat,
 			$kategori_ad_norm,
 			$euro_kur,
-			$rsd_kur,
 			$this->default_kargo,
 			$this->default_marj
 		);
@@ -86,6 +82,8 @@ class Trendyol_Product_Importer {
 			return new WP_Error( 'price_calc_failed', __( 'Satış fiyatı hesaplanamadı.', 'trendyol-woocommerce-importer' ) );
 		}
 
+		$rsd_kur            = get_trendyol_rsd_kuru();
+		$rsd_kur            = ( is_numeric( $rsd_kur ) && (float) $rsd_kur > 0 ) ? (float) $rsd_kur : 117.38;
 		$trendyol_alish_rsd = 0;
 		if ( $tl_fiyat > 0 && $euro_kur > 0 && $rsd_kur > 0 ) {
 			$euro               = (float) $tl_fiyat / (float) $euro_kur;

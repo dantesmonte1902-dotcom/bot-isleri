@@ -91,4 +91,22 @@ class Trendyol_Kargo_Service {
 
 		return false;
 	}
+
+	public function save_manual_bam_rate( $rate ) {
+		if ( function_exists( 'set_trendyol_bam_kuru' ) ) {
+			set_trendyol_bam_kuru( $rate );
+		}
+
+		return true;
+	}
+
+	public function save_currency_setting( $currency ) {
+		$currency = sanitize_key( $currency );
+		if ( in_array( $currency, array( 'rsd', 'bam', 'eur' ), true ) ) {
+			update_option( 'trendyol_price_currency', $currency );
+			return true;
+		}
+
+		return false;
+	}
 }

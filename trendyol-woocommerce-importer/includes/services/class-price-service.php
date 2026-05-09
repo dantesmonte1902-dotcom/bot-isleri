@@ -24,13 +24,11 @@ class Trendyol_Price_Service {
 		}
 
 		$euro_kur = function_exists( 'get_trendyol_euro_kuru' ) ? get_trendyol_euro_kuru() : 0;
-		$rsd_kur  = function_exists( 'get_trendyol_rsd_kuru' ) ? get_trendyol_rsd_kuru() : 0;
 
-		return trendyol_final_fiyat_rsd(
+		return trendyol_active_currency_price(
 			$tl_price,
 			$category,
 			$euro_kur,
-			$rsd_kur,
 			$this->default_kargo,
 			$this->default_marj
 		);
