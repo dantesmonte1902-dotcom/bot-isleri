@@ -84,13 +84,19 @@ if ( ! function_exists( 'get_trendyol_rsd_kuru' ) ) {
 
 if ( ! function_exists( 'set_trendyol_euro_kuru' ) ) {
 	function set_trendyol_euro_kuru( $kur ) {
-		update_option( 'trendyol_euro_kur', floatval( $kur ) );
+		$kur = floatval( $kur );
+		update_option( 'trendyol_euro_kur', $kur );
+		$file = TRENDYOL_IMPORTER_PATH . 'data/euro_kur.txt';
+		file_put_contents( $file, (string) $kur );
 	}
 }
 
 if ( ! function_exists( 'set_trendyol_rsd_kuru' ) ) {
 	function set_trendyol_rsd_kuru( $kur ) {
-		update_option( 'trendyol_rsd_kur', floatval( $kur ) );
+		$kur = floatval( $kur );
+		update_option( 'trendyol_rsd_kur', $kur );
+		$file = TRENDYOL_IMPORTER_PATH . 'data/rsd_kur.txt';
+		file_put_contents( $file, (string) $kur );
 	}
 }
 
