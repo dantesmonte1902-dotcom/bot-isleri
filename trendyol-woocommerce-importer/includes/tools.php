@@ -87,7 +87,9 @@ if ( ! function_exists( 'set_trendyol_euro_kuru' ) ) {
 		$kur = floatval( $kur );
 		update_option( 'trendyol_euro_kur', $kur );
 		$file = TRENDYOL_IMPORTER_PATH . 'data/euro_kur.txt';
-		file_put_contents( $file, (string) $kur );
+		if ( is_writable( dirname( $file ) ) ) {
+			file_put_contents( $file, (string) $kur );
+		}
 	}
 }
 
@@ -96,7 +98,9 @@ if ( ! function_exists( 'set_trendyol_rsd_kuru' ) ) {
 		$kur = floatval( $kur );
 		update_option( 'trendyol_rsd_kur', $kur );
 		$file = TRENDYOL_IMPORTER_PATH . 'data/rsd_kur.txt';
-		file_put_contents( $file, (string) $kur );
+		if ( is_writable( dirname( $file ) ) ) {
+			file_put_contents( $file, (string) $kur );
+		}
 	}
 }
 
