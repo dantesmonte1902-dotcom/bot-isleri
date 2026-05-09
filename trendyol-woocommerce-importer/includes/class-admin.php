@@ -274,9 +274,10 @@ class Trendyol_Admin {
 			return;
 		}
 
-		$profit       = (float) $profit_data['net_profit_eur'];
-		$kargo_eur    = (float) $profit_data['kargo_eur'];
-		$current_euro = (float) $profit_data['current_euro_kur'];
+		$profit            = (float) $profit_data['net_profit_eur'];
+		$kargo_eur         = (float) $profit_data['kargo_eur'];
+		$current_sale_rate = (float) $profit_data['sale_currency_rate'];
+		$sale_rate_label   = ! empty( $profit_data['sale_currency_label'] ) ? (string) $profit_data['sale_currency_label'] : 'RSD/EUR';
 
 		$state_class = 'trendyol-profit-box--warn';
 		if ( $profit > 0 ) {
@@ -289,7 +290,7 @@ class Trendyol_Admin {
 		echo '<div class="trendyol-profit-title">Net Kâr</div>';
 		echo '<div class="trendyol-profit-value">€ ' . esc_html( number_format( $profit, 2, '.', '' ) ) . '</div>';
 		echo '<div class="trendyol-profit-meta">Kargo: €' . esc_html( number_format( $kargo_eur, 2, '.', '' ) ) . '</div>';
-		echo '<div class="trendyol-profit-meta">Kur: ' . esc_html( number_format( $current_euro, 4, '.', '' ) ) . '</div>';
+		echo '<div class="trendyol-profit-meta">Kur: ' . esc_html( $sale_rate_label ) . ' ' . esc_html( number_format( $current_sale_rate, 4, '.', '' ) ) . '</div>';
 		echo '</div>';
 		echo '</div>';
 	}
@@ -299,9 +300,9 @@ class Trendyol_Admin {
 		$alis_tl           = get_post_meta( $post_id, 'trendyol_original_price_tl', true );
 		$alis_rsd_fallback = get_post_meta( $post_id, 'trendyol_original_price_rsd', true );
 
-		$satis_rsd = $this->price_service->get_product_sale_price_rsd( $post_id );
+		$satis_fiyat = $this->price_service->get_product_sale_price_rsd( $post_id );
 
-		if ( '' === $satis_rsd || null === $satis_rsd || ! is_numeric( $satis_rsd ) ) {
+		if ( '' === $satis_fiyat || null === $satis_fiyat || ! is_numeric( $satis_fiyat ) ) {
 			return array(
 				'ok'     => false,
 				'reason' => 'Satış fiyatı yok',
@@ -310,6 +311,13 @@ class Trendyol_Admin {
 
 		$current_euro_kur = get_trendyol_euro_kuru();
 		$current_rsd_kur  = get_trendyol_rsd_kuru();
+		$sale_rate_info   = method_exists( $this->price_service, 'get_active_currency_rate_info' )
+			? $this->price_service->get_active_currency_rate_info()
+			: array(
+				'currency' => 'rsd',
+				'rate'     => $current_rsd_kur,
+				'label'    => 'RSD/EUR',
+			);
 
 		$purchase_eur = null;
 
@@ -346,7 +354,17 @@ class Trendyol_Admin {
 			}
 		}
 
-		$sales_eur      = (float) $satis_rsd / (float) $current_rsd_kur;
+		$sales_eur = method_exists( $this->price_service, 'convert_sale_price_to_eur' )
+			? $this->price_service->convert_sale_price_to_eur( (float) $satis_fiyat )
+			: ( (float) $satis_fiyat / (float) $current_rsd_kur );
+
+		if ( null === $sales_eur ) {
+			return array(
+				'ok'     => false,
+				'reason' => 'Kur bilgisi yok',
+			);
+		}
+
 		$total_cost_eur = (float) $purchase_eur + (float) $kargo_eur;
 		$net_profit_eur = (float) $sales_eur - (float) $total_cost_eur;
 
@@ -359,6 +377,9 @@ class Trendyol_Admin {
 			'net_profit_eur'   => $net_profit_eur,
 			'current_euro_kur' => $current_euro_kur,
 			'current_rsd_kur'  => $current_rsd_kur,
+			'sale_currency'    => $sale_rate_info['currency'],
+			'sale_currency_rate'  => (float) $sale_rate_info['rate'],
+			'sale_currency_label' => $sale_rate_info['label'],
 		);
 	}
 
