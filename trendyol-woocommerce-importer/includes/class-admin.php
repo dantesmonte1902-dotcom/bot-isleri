@@ -10,6 +10,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Trendyol_Admin {
 
+	const MAX_OUTPUT_BUFFER_LEVELS            = 10;
+	const FEATURED_IMAGE_EXPORT_BATCH_SIZE    = 200;
+	const FEATURED_IMAGE_EXPORT_TIME_LIMIT    = 20;
+
 	private $log_service;
 	private $price_service;
 	private $import_service;
@@ -213,19 +217,19 @@ class Trendyol_Admin {
 				isset( $_POST['featured_image_export_status'] ) ? wp_unslash( $_POST['featured_image_export_status'] ) : 'both'
 			);
 			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
-			$products      = $this->product_query_service->get_products_with_featured_images(
+			$product_count = $this->product_query_service->count_products_with_featured_images(
 				array(
 					'statuses' => $statuses,
 				)
 			);
 
-			if ( empty( $products ) ) {
+			if ( $product_count <= 0 ) {
 				$_SESSION['trendyol_featured_image_export_notice'] = 'İndirilecek öne çıkan görsel bulunamadı.';
 				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
 				exit;
 			}
 
-			$this->download_product_featured_images_zip( $products, $status_filter );
+			$this->download_product_featured_images_zip( $statuses, $status_filter );
 		}
 
 		include TRENDYOL_IMPORTER_PATH . 'admin/admin-page.php';
@@ -275,7 +279,7 @@ class Trendyol_Admin {
 		);
 		$content  = implode( "\n", $urls );
 
-		$max_buffer_levels = 10;
+		$max_buffer_levels = self::MAX_OUTPUT_BUFFER_LEVELS;
 
 		while ( ob_get_level() > 0 && $max_buffer_levels-- > 0 ) {
 			ob_end_clean();
@@ -290,7 +294,7 @@ class Trendyol_Admin {
 		exit;
 	}
 
-	private function download_product_featured_images_zip( $products, $status_filter ) {
+	private function download_product_featured_images_zip( $statuses, $status_filter ) {
 		if ( ! class_exists( 'ZipArchive' ) ) {
 			$_SESSION['trendyol_featured_image_export_notice'] = 'Sunucuda ZIP desteği olmadığı için görseller indirilemedi.';
 			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
@@ -315,24 +319,42 @@ class Trendyol_Admin {
 			exit;
 		}
 
+		$this->prepare_long_running_export();
+
 		$added_files = 0;
+		$offset      = 0;
+		$batch_size  = self::FEATURED_IMAGE_EXPORT_BATCH_SIZE;
 
-		foreach ( $products as $product ) {
-			$product_id   = isset( $product['product_id'] ) ? intval( $product['product_id'] ) : 0;
-			$thumbnail_id = isset( $product['thumbnail_id'] ) ? intval( $product['thumbnail_id'] ) : 0;
-			$product_name = isset( $product['product_name'] ) ? $product['product_name'] : '';
-			$file_path    = $this->get_attachment_export_file_path( $thumbnail_id );
+		do {
+			$this->refresh_long_running_export_time_limit();
 
-			if ( $product_id <= 0 || $thumbnail_id <= 0 || empty( $file_path ) || ! file_exists( $file_path ) ) {
-				continue;
+			$products = $this->product_query_service->get_products_with_featured_images(
+				array(
+					'statuses' => $statuses,
+					'limit'    => $batch_size,
+					'offset'   => $offset,
+				)
+			);
+
+			foreach ( $products as $product ) {
+				$product_id   = isset( $product['product_id'] ) ? intval( $product['product_id'] ) : 0;
+				$thumbnail_id = isset( $product['thumbnail_id'] ) ? intval( $product['thumbnail_id'] ) : 0;
+				$product_name = isset( $product['product_name'] ) ? $product['product_name'] : '';
+				$file_path    = $this->get_attachment_export_file_path( $thumbnail_id );
+
+				if ( $product_id <= 0 || $thumbnail_id <= 0 || empty( $file_path ) || ! file_exists( $file_path ) ) {
+					continue;
+				}
+
+				$filename = $this->build_featured_image_zip_entry_name( $product_id, $product_name, $file_path );
+
+				if ( $zip->addFile( $file_path, $filename ) ) {
+					$added_files++;
+				}
 			}
 
-			$filename = $this->build_featured_image_zip_entry_name( $product_id, $product_name, $file_path );
-
-			if ( $zip->addFile( $file_path, $filename ) ) {
-				$added_files++;
-			}
-		}
+			$offset += count( $products );
+		} while ( count( $products ) === $batch_size );
 
 		$zip->close();
 
@@ -349,14 +371,7 @@ class Trendyol_Admin {
 			gmdate( 'Y-m-d-His' )
 		);
 
-		nocache_headers();
-		header( 'Content-Type: application/zip' );
-		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
-		header( 'Content-Length: ' . filesize( $zip_path ) );
-
-		readfile( $zip_path );
-		@unlink( $zip_path );
-		exit;
+		$this->stream_export_file_download( $zip_path, $filename, 'application/zip' );
 	}
 
 	private function build_featured_image_zip_entry_name( $product_id, $product_name, $file_path ) {
@@ -398,6 +413,61 @@ class Trendyol_Admin {
 		}
 
 		return '';
+	}
+
+	private function prepare_long_running_export() {
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true );
+		}
+
+		$this->refresh_long_running_export_time_limit();
+	}
+
+	private function refresh_long_running_export_time_limit() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( self::FEATURED_IMAGE_EXPORT_TIME_LIMIT );
+		}
+	}
+
+	private function stream_export_file_download( $file_path, $filename, $content_type ) {
+		$file_size = @filesize( $file_path );
+
+		if ( false === $file_size || ! is_readable( $file_path ) ) {
+			@unlink( $file_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası okunamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$max_buffer_levels = self::MAX_OUTPUT_BUFFER_LEVELS;
+
+		while ( ob_get_level() > 0 && $max_buffer_levels-- > 0 ) {
+			ob_end_clean();
+		}
+
+		nocache_headers();
+		header( 'Content-Type: ' . $content_type );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . $file_size );
+		header( 'Content-Transfer-Encoding: binary' );
+
+		$handle = fopen( $file_path, 'rb' );
+
+		if ( false === $handle ) {
+			@unlink( $file_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası açılamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		while ( ! feof( $handle ) ) {
+			echo fread( $handle, 1024 * 1024 );
+			flush();
+		}
+
+		fclose( $handle );
+		@unlink( $file_path );
+		exit;
 	}
 
 	public function ajax_variant_stock_sync() {
