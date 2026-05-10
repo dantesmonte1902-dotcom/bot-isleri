@@ -195,6 +195,32 @@ class Trendyol_Admin {
 			$this->download_trendyol_product_urls_txt( $urls, $status_filter );
 		}
 
+		if (
+			isset( $_POST['trendyol_export_featured_images'] ) &&
+			isset( $_POST['_wpnonce'] ) &&
+			wp_verify_nonce( $_POST['_wpnonce'], 'trendyol_export_featured_images_nonce' )
+		) {
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
+			}
+
+			$status_filter = isset( $_POST['featured_image_export_status'] ) ? sanitize_key( wp_unslash( $_POST['featured_image_export_status'] ) ) : 'both';
+			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
+			$products      = $this->product_query_service->get_products_with_featured_images(
+				array(
+					'statuses' => $statuses,
+				)
+			);
+
+			if ( empty( $products ) ) {
+				$_SESSION['trendyol_featured_image_export_notice'] = 'İndirilecek öne çıkan görsel bulunamadı.';
+				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+				exit;
+			}
+
+			$this->download_product_featured_images_zip( $products, $status_filter );
+		}
+
 		include TRENDYOL_IMPORTER_PATH . 'admin/admin-page.php';
 	}
 
@@ -228,6 +254,106 @@ class Trendyol_Admin {
 
 		echo $content;
 		exit;
+	}
+
+	private function download_product_featured_images_zip( $products, $status_filter ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			$_SESSION['trendyol_featured_image_export_notice'] = 'Sunucuda ZIP desteği olmadığı için görseller indirilemedi.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$allowed_status_filters = array( 'both', 'draft', 'publish' );
+		$status_filter          = in_array( $status_filter, $allowed_status_filters, true ) ? $status_filter : 'both';
+		$zip_path               = wp_tempnam( 'trendyol-one-cikan-gorseller-' . $status_filter . '.zip' );
+
+		if ( empty( $zip_path ) ) {
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası hazırlanamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$zip = new ZipArchive();
+
+		if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
+			@unlink( $zip_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası oluşturulamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$added_files = 0;
+
+		foreach ( $products as $product ) {
+			$product_id   = isset( $product['product_id'] ) ? intval( $product['product_id'] ) : 0;
+			$thumbnail_id = isset( $product['thumbnail_id'] ) ? intval( $product['thumbnail_id'] ) : 0;
+			$product_name = isset( $product['product_name'] ) ? sanitize_file_name( $product['product_name'] ) : '';
+			$file_path    = $this->get_attachment_export_file_path( $thumbnail_id );
+
+			if ( $product_id <= 0 || $thumbnail_id <= 0 || empty( $file_path ) || ! file_exists( $file_path ) ) {
+				continue;
+			}
+
+			$extension = pathinfo( $file_path, PATHINFO_EXTENSION );
+			$filename  = sprintf(
+				'%d-%s%s',
+				$product_id,
+				! empty( $product_name ) ? $product_name : 'urun',
+				! empty( $extension ) ? '.' . strtolower( $extension ) : ''
+			);
+
+			if ( $zip->addFile( $file_path, $filename ) ) {
+				$added_files++;
+			}
+		}
+
+		$zip->close();
+
+		if ( $added_files <= 0 || ! file_exists( $zip_path ) ) {
+			@unlink( $zip_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'İndirilebilir öne çıkan görsel bulunamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$filename = sprintf(
+			'one-cikan-gorseller-%s-%s.zip',
+			$status_filter,
+			gmdate( 'Y-m-d-His' )
+		);
+
+		nocache_headers();
+		header( 'Content-Type: application/zip' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $zip_path ) );
+
+		readfile( $zip_path );
+		@unlink( $zip_path );
+		exit;
+	}
+
+	private function get_attachment_export_file_path( $attachment_id ) {
+		$attachment_id = intval( $attachment_id );
+
+		if ( $attachment_id <= 0 ) {
+			return '';
+		}
+
+		if ( function_exists( 'wp_get_original_image_path' ) ) {
+			$original_path = wp_get_original_image_path( $attachment_id );
+
+			if ( ! empty( $original_path ) && file_exists( $original_path ) ) {
+				return $original_path;
+			}
+		}
+
+		$file_path = get_attached_file( $attachment_id );
+
+		if ( ! empty( $file_path ) && file_exists( $file_path ) ) {
+			return $file_path;
+		}
+
+		return '';
 	}
 
 	public function ajax_variant_stock_sync() {
