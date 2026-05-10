@@ -19,7 +19,7 @@ $export_counts = array(
 		<h2>🖼️ Öne Çıkan Görselleri İndir</h2>
 		<p>
 			Ürünlerinizin öne çıkan görsellerini tek bir <b>.zip</b> dosyası halinde indirebilirsiniz.<br>
-			Yalnızca öne çıkan görseli olan ürünler arşive eklenir ve büyük arşivler parça parça hazırlanarak indirilir.
+			Yalnızca öne çıkan görseli olan ürünler arşive eklenir ve büyük arşivler sunucuda partiler halinde hazırlanır.
 		</p>
 	</div>
 
