@@ -254,13 +254,30 @@ class Trendyol_Admin {
 
 	private function download_trendyol_product_urls_txt( $urls, $status_filter ) {
 		$status_filter = $this->normalize_export_status_filter( $status_filter );
+		$urls          = array_values(
+			array_filter(
+				array_unique(
+					array_map(
+						'trim',
+						array_map( 'strval', (array) $urls )
+					)
+				),
+				static function ( $url ) {
+					return '' !== $url;
+				}
+			)
+		);
 
 		$filename = sprintf(
 			'trendyol-urun-linkleri-%s-%s.txt',
 			$status_filter,
 			gmdate( 'Y-m-d-His' )
 		);
-		$content  = implode( "\r\n", $urls );
+		$content  = implode( "\n", $urls );
+
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
+		}
 
 		nocache_headers();
 		header( 'Content-Type: text/plain; charset=utf-8' );

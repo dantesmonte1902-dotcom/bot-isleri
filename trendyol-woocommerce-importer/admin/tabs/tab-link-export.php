@@ -18,7 +18,7 @@ $export_counts = array(
 	<div class="trendyol-section">
 		<h2>🔗 Trendyol Linklerini Dışa Aktar</h2>
 		<p>
-			WooCommerce ürünlerinde kayıtlı <code>trendyol_product_url</code> alanlarını tek satırda bir link olacak şekilde <b>.txt</b> olarak indirebilirsiniz.<br>
+			WooCommerce ürünlerinde kayıtlı <code>trendyol_product_url</code> alanlarını <b>.txt</b> olarak sadece alt alta URL listesi şeklinde indirebilirsiniz.<br>
 			Bu dosyayı başka sitedeki <b>Toplu Ekle</b> alanına yükleyerek ürün linklerini tekrar toplu içeri alabilirsiniz.
 		</p>
 	</div>
