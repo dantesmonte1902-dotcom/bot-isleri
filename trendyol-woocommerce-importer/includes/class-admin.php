@@ -92,11 +92,14 @@ class Trendyol_Admin {
 				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
 			}
 
+			$product_sizes  = isset( $_POST['product_sizes'] ) ? json_decode( wp_unslash( $_POST['product_sizes'] ), true ) : array();
+			$product_images = isset( $_POST['product_images'] ) ? json_decode( wp_unslash( $_POST['product_images'] ), true ) : array();
+
 			$product_data = array(
 				'name'     => isset( $_POST['product_name'] ) ? sanitize_text_field( $_POST['product_name'] ) : '',
 				'price'    => isset( $_POST['product_price'] ) ? floatval( $_POST['product_price'] ) : 0,
-				'sizes'    => isset( $_POST['product_sizes'] ) ? json_decode( wp_unslash( $_POST['product_sizes'] ), true ) : array(),
-				'images'   => isset( $_POST['product_images'] ) ? json_decode( wp_unslash( $_POST['product_images'] ), true ) : array(),
+				'sizes'    => is_array( $product_sizes ) ? $product_sizes : array(),
+				'images'   => is_array( $product_images ) ? $product_images : array(),
 				'content'  => isset( $_POST['product_content'] ) ? wp_kses_post( wp_unslash( $_POST['product_content'] ) ) : '',
 				'url'      => isset( $_POST['product_url'] ) ? esc_url_raw( $_POST['product_url'] ) : '',
 				'category' => isset( $_POST['product_category'] ) ? sanitize_text_field( $_POST['product_category'] ) : '',
