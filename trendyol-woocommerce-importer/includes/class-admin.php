@@ -211,9 +211,12 @@ class Trendyol_Admin {
 	}
 
 	private function download_trendyol_product_urls_txt( $urls, $status_filter ) {
+		$allowed_status_filters = array( 'both', 'draft', 'publish' );
+		$status_filter          = in_array( $status_filter, $allowed_status_filters, true ) ? $status_filter : 'both';
+
 		$filename = sprintf(
 			'trendyol-urun-linkleri-%s-%s.txt',
-			sanitize_key( $status_filter ),
+			$status_filter,
 			gmdate( 'Y-m-d-His' )
 		);
 		$content  = implode( "\r\n", $urls );
