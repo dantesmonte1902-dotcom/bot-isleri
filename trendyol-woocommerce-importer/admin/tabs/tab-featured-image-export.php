@@ -8,9 +8,9 @@ if ( ! empty( $_SESSION['trendyol_featured_image_export_notice'] ) ) {
 }
 
 $export_counts = array(
-	'both'    => count( $query_service->get_product_ids_with_featured_images( array( 'statuses' => array( 'draft', 'publish' ) ) ) ),
-	'draft'   => count( $query_service->get_product_ids_with_featured_images( array( 'statuses' => array( 'draft' ) ) ) ),
-	'publish' => count( $query_service->get_product_ids_with_featured_images( array( 'statuses' => array( 'publish' ) ) ) ),
+	'both'    => $query_service->count_products_with_featured_images( array( 'statuses' => array( 'draft', 'publish' ) ) ),
+	'draft'   => $query_service->count_products_with_featured_images( array( 'statuses' => array( 'draft' ) ) ),
+	'publish' => $query_service->count_products_with_featured_images( array( 'statuses' => array( 'publish' ) ) ),
 );
 ?>
 

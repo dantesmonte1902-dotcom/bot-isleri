@@ -53,6 +53,33 @@ class Trendyol_Product_Query_Service {
 		return array_map( 'intval', (array) $wpdb->get_col( $prepared ) );
 	}
 
+	public function count_trendyol_products( $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'statuses' => array( 'draft', 'publish' ),
+		);
+
+		$args     = wp_parse_args( $args, $defaults );
+		$statuses = $this->normalize_statuses( $args['statuses'] );
+
+		$status_placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+
+		$sql = "
+			SELECT COUNT(DISTINCT p.ID)
+			FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+			WHERE p.post_type = 'product'
+			AND p.post_status IN ($status_placeholders)
+			AND pm.meta_key = 'trendyol_product_url'
+			AND pm.meta_value != ''
+		";
+
+		$prepared = $wpdb->prepare( $sql, $statuses );
+
+		return intval( $wpdb->get_var( $prepared ) );
+	}
+
 	public function get_trendyol_product_urls( $args = array() ) {
 		global $wpdb;
 
@@ -139,6 +166,33 @@ class Trendyol_Product_Query_Service {
 		$prepared = $wpdb->prepare( $sql, $params );
 
 		return array_map( 'intval', (array) $wpdb->get_col( $prepared ) );
+	}
+
+	public function count_products_with_featured_images( $args = array() ) {
+		global $wpdb;
+
+		$defaults = array(
+			'statuses' => array( 'draft', 'publish' ),
+		);
+
+		$args     = wp_parse_args( $args, $defaults );
+		$statuses = $this->normalize_statuses( $args['statuses'] );
+
+		$status_placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+
+		$sql = "
+			SELECT COUNT(DISTINCT p.ID)
+			FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+			WHERE p.post_type = 'product'
+			AND p.post_status IN ($status_placeholders)
+			AND pm.meta_key = '_thumbnail_id'
+			AND pm.meta_value != ''
+		";
+
+		$prepared = $wpdb->prepare( $sql, $statuses );
+
+		return intval( $wpdb->get_var( $prepared ) );
 	}
 
 	public function get_products_with_featured_images( $args = array() ) {

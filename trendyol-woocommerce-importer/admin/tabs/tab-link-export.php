@@ -8,9 +8,9 @@ if ( ! empty( $_SESSION['trendyol_link_export_notice'] ) ) {
 }
 
 $export_counts = array(
-	'both'    => count( $query_service->get_trendyol_product_ids( array( 'statuses' => array( 'draft', 'publish' ) ) ) ),
-	'draft'   => count( $query_service->get_trendyol_product_ids( array( 'statuses' => array( 'draft' ) ) ) ),
-	'publish' => count( $query_service->get_trendyol_product_ids( array( 'statuses' => array( 'publish' ) ) ) ),
+	'both'    => $query_service->count_trendyol_products( array( 'statuses' => array( 'draft', 'publish' ) ) ),
+	'draft'   => $query_service->count_trendyol_products( array( 'statuses' => array( 'draft' ) ) ),
+	'publish' => $query_service->count_trendyol_products( array( 'statuses' => array( 'publish' ) ) ),
 );
 ?>
 
