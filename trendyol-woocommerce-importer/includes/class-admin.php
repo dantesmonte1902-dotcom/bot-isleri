@@ -13,6 +13,7 @@ class Trendyol_Admin {
 	const MAX_OUTPUT_BUFFER_LEVELS            = 10;
 	const FEATURED_IMAGE_EXPORT_BATCH_SIZE    = 200;
 	const FEATURED_IMAGE_EXPORT_TIME_LIMIT    = 20;
+	const EXPORT_STREAM_CHUNK_SIZE            = 65536;
 
 	private $log_service;
 	private $price_service;
@@ -461,7 +462,7 @@ class Trendyol_Admin {
 		}
 
 		while ( ! feof( $handle ) ) {
-			echo fread( $handle, 1024 * 1024 );
+			echo fread( $handle, self::EXPORT_STREAM_CHUNK_SIZE );
 			flush();
 		}
 
