@@ -14,12 +14,14 @@ class Trendyol_Admin {
 	private $price_service;
 	private $import_service;
 	private $bulk_import_service;
+	private $product_query_service;
 
 	public function __construct() {
 		$this->log_service         = new Trendyol_Log_Service();
 		$this->price_service       = new Trendyol_Price_Service();
 		$this->import_service      = new Trendyol_Import_Service();
 		$this->bulk_import_service = new Trendyol_Bulk_Import_Service();
+		$this->product_query_service = new Trendyol_Product_Query_Service();
 
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'wp_ajax_trendyol_test_telegram', array( $this, 'ajax_test_telegram' ) );
@@ -167,7 +169,62 @@ class Trendyol_Admin {
 			exit;
 		}
 
+		if (
+			isset( $_POST['trendyol_export_product_urls'] ) &&
+			isset( $_POST['_wpnonce'] ) &&
+			wp_verify_nonce( $_POST['_wpnonce'], 'trendyol_export_product_urls_nonce' )
+		) {
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
+			}
+
+			$status_filter = isset( $_POST['export_status'] ) ? sanitize_key( wp_unslash( $_POST['export_status'] ) ) : 'both';
+			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
+			$urls          = $this->product_query_service->get_trendyol_product_urls(
+				array(
+					'statuses' => $statuses,
+				)
+			);
+
+			if ( empty( $urls ) ) {
+				$_SESSION['trendyol_link_export_notice'] = 'Dışa aktarılacak Trendyol linki bulunamadı.';
+				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=bulk-import' ) );
+				exit;
+			}
+
+			$this->download_trendyol_product_urls_txt( $urls, $status_filter );
+		}
+
 		include TRENDYOL_IMPORTER_PATH . 'admin/admin-page.php';
+	}
+
+	private function map_export_status_filter_to_statuses( $status_filter ) {
+		switch ( $status_filter ) {
+			case 'publish':
+				return array( 'publish' );
+			case 'draft':
+				return array( 'draft' );
+			case 'both':
+			default:
+				return array( 'draft', 'publish' );
+		}
+	}
+
+	private function download_trendyol_product_urls_txt( $urls, $status_filter ) {
+		$filename = sprintf(
+			'trendyol-urun-linkleri-%s-%s.txt',
+			sanitize_key( $status_filter ),
+			gmdate( 'Y-m-d-His' )
+		);
+		$content  = implode( "\r\n", $urls );
+
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . strlen( $content ) );
+
+		echo $content;
+		exit;
 	}
 
 	public function ajax_variant_stock_sync() {
