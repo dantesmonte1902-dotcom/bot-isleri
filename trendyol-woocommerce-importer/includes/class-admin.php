@@ -275,7 +275,9 @@ class Trendyol_Admin {
 		);
 		$content  = implode( "\n", $urls );
 
-		while ( ob_get_level() > 0 ) {
+		$max_buffer_levels = 10;
+
+		while ( ob_get_level() > 0 && $max_buffer_levels-- > 0 ) {
 			ob_end_clean();
 		}
 
