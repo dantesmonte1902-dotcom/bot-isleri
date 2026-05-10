@@ -188,7 +188,7 @@ class Trendyol_Admin {
 
 			if ( empty( $urls ) ) {
 				$_SESSION['trendyol_link_export_notice'] = 'Dışa aktarılacak Trendyol linki bulunamadı.';
-				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=bulk-import' ) );
+				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=link-export' ) );
 				exit;
 			}
 

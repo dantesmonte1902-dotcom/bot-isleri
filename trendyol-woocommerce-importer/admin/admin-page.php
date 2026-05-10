@@ -18,6 +18,10 @@ $primary_tabs = array(
 		'icon'  => '📦',
 		'label' => __( 'Toplu Ekle', 'trendyol-woocommerce-importer' ),
 	),
+	'link-export' => array(
+		'icon'  => '🔗',
+		'label' => __( 'Link Dışa Aktar', 'trendyol-woocommerce-importer' ),
+	),
 	'categories' => array(
 		'icon'  => '📂',
 		'label' => __( 'Kategoriler', 'trendyol-woocommerce-importer' ),
@@ -60,6 +64,7 @@ $all_tabs = $primary_tabs + $tool_tabs;
 $tab_files = array(
 	'import'              => 'admin/tabs/tab-import.php',
 	'bulk-import'         => 'admin/tabs/tab-bulk-import.php',
+	'link-export'         => 'admin/tabs/tab-link-export.php',
 	'categories'          => 'admin/tabs/tab-categories.php',
 	'history'             => 'admin/tabs/tab-history.php',
 	'settings'            => 'admin/tabs/tab-settings.php',
