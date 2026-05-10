@@ -3,8 +3,6 @@
 if(typeof ajaxurl==="undefined"){var ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';}
 </script>
 <?php
-if ( ! session_id() ) session_start();
-
 $data_dir = dirname(dirname(__DIR__)) . '/data/';
 $query_service = new Trendyol_Product_Query_Service();
 

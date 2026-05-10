@@ -97,7 +97,7 @@ class Trendyol_Product_Query_Service {
 				continue;
 			}
 
-			$urls[] = esc_url_raw( $url );
+			$urls[] = $url;
 		}
 
 		return array_values( array_unique( array_filter( $urls ) ) );
