@@ -462,7 +462,13 @@ class Trendyol_Admin {
 		}
 
 		while ( ! feof( $handle ) ) {
-			echo fread( $handle, self::EXPORT_STREAM_CHUNK_SIZE );
+			$chunk = fread( $handle, self::EXPORT_STREAM_CHUNK_SIZE );
+
+			if ( false === $chunk ) {
+				break;
+			}
+
+			echo $chunk;
 			flush();
 		}
 
