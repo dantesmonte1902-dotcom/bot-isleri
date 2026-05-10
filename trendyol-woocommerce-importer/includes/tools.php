@@ -262,7 +262,7 @@ if ( ! function_exists( 'trendyol_extract_variants_from_html' ) ) {
 
 		$decoded_html = html_entity_decode( $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 
-		$store_variant = static function ( &$final_rows, $value, $beautified, $in_stock ) {
+		$store_variant = static function ( $value, $beautified, $in_stock ) use ( &$final ) {
 			$value      = html_entity_decode( (string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			$beautified = html_entity_decode( (string) $beautified, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			$in_stock   = (bool) $in_stock;
@@ -283,15 +283,15 @@ if ( ! function_exists( 'trendyol_extract_variants_from_html' ) ) {
 			);
 
 			if ( ! empty( $norm_value ) ) {
-				$final_rows[ 'value:' . $norm_value ] = $row;
+				$final[ 'value:' . $norm_value ] = $row;
 			}
 
 			if ( ! empty( $norm_beautified ) ) {
-				$final_rows[ 'beauty:' . $norm_beautified ] = $row;
+				$final[ 'beauty:' . $norm_beautified ] = $row;
 			}
 		};
 
-		$extract_from_chunk = static function ( $chunk ) use ( &$store_variant, &$final ) {
+		$extract_from_chunk = static function ( $chunk ) use ( $store_variant ) {
 			$value      = '';
 			$beautified = '';
 			$in_stock   = true;
@@ -308,7 +308,7 @@ if ( ! function_exists( 'trendyol_extract_variants_from_html' ) ) {
 				$in_stock = isset( $stock_match[1] ) && 'true' === strtolower( (string) $stock_match[1] );
 			}
 
-			$store_variant( $final, $value, $beautified, $in_stock );
+			$store_variant( $value, $beautified, $in_stock );
 		};
 
 		$patterns = array(
