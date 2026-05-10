@@ -217,6 +217,9 @@ class Trendyol_Admin {
 			$status_filter = $this->normalize_export_status_filter(
 				isset( $_POST['featured_image_export_status'] ) ? wp_unslash( $_POST['featured_image_export_status'] ) : 'both'
 			);
+			$folder_mode   = $this->normalize_featured_image_export_folder_mode(
+				isset( $_POST['featured_image_export_folder_mode'] ) ? wp_unslash( $_POST['featured_image_export_folder_mode'] ) : 'flat'
+			);
 			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
 			$product_count = $this->product_query_service->count_products_with_featured_images(
 				array(
@@ -230,7 +233,7 @@ class Trendyol_Admin {
 				exit;
 			}
 
-			$this->download_product_featured_images_zip( $statuses, $status_filter );
+			$this->download_product_featured_images_zip( $statuses, $status_filter, $folder_mode );
 		}
 
 		include TRENDYOL_IMPORTER_PATH . 'admin/admin-page.php';
@@ -255,6 +258,13 @@ class Trendyol_Admin {
 		$status_filter          = sanitize_key( (string) $status_filter );
 
 		return in_array( $status_filter, $allowed_status_filters, true ) ? $status_filter : 'both';
+	}
+
+	private function normalize_featured_image_export_folder_mode( $folder_mode ) {
+		$allowed_folder_modes = array( 'flat', 'category' );
+		$folder_mode          = sanitize_key( (string) $folder_mode );
+
+		return in_array( $folder_mode, $allowed_folder_modes, true ) ? $folder_mode : 'flat';
 	}
 
 	private function download_trendyol_product_urls_txt( $urls, $status_filter ) {
@@ -295,7 +305,7 @@ class Trendyol_Admin {
 		exit;
 	}
 
-	private function download_product_featured_images_zip( $statuses, $status_filter ) {
+	private function download_product_featured_images_zip( $statuses, $status_filter, $folder_mode = 'flat' ) {
 		if ( ! class_exists( 'ZipArchive' ) ) {
 			$_SESSION['trendyol_featured_image_export_notice'] = 'Sunucuda ZIP desteği olmadığı için görseller indirilemedi.';
 			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
@@ -303,6 +313,7 @@ class Trendyol_Admin {
 		}
 
 		$status_filter          = $this->normalize_export_status_filter( $status_filter );
+		$folder_mode            = $this->normalize_featured_image_export_folder_mode( $folder_mode );
 		$zip_path               = wp_tempnam( 'trendyol-one-cikan-gorseller-' . $status_filter . '.zip' );
 
 		if ( empty( $zip_path ) ) {
@@ -347,7 +358,7 @@ class Trendyol_Admin {
 					continue;
 				}
 
-				$filename = $this->build_featured_image_zip_entry_name( $product_id, $product_name, $file_path );
+				$filename = $this->build_featured_image_zip_entry_name( $product_id, $product_name, $file_path, $folder_mode );
 
 				if ( $zip->addFile( $file_path, $filename ) ) {
 					$added_files++;
@@ -375,11 +386,12 @@ class Trendyol_Admin {
 		$this->stream_export_file_download( $zip_path, $filename, 'application/zip' );
 	}
 
-	private function build_featured_image_zip_entry_name( $product_id, $product_name, $file_path ) {
+	private function build_featured_image_zip_entry_name( $product_id, $product_name, $file_path, $folder_mode = 'flat' ) {
 		$product_id = intval( $product_id );
 		$basename   = sanitize_title( wp_strip_all_tags( (string) $product_name ) );
 		$basename   = trim( $basename, '.-_' );
 		$extension  = sanitize_key( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$folder_mode = $this->normalize_featured_image_export_folder_mode( $folder_mode );
 
 		if ( '' === $basename ) {
 			$basename = 'urun';
@@ -389,7 +401,37 @@ class Trendyol_Admin {
 			$extension = 'jpg';
 		}
 
-		return sprintf( '%d-%s.%s', $product_id, $basename, $extension );
+		$filename = sprintf( '%d-%s.%s', $product_id, $basename, $extension );
+
+		if ( 'category' !== $folder_mode ) {
+			return $filename;
+		}
+
+		return $this->get_featured_image_export_category_folder( $product_id ) . '/' . $filename;
+	}
+
+	private function get_featured_image_export_category_folder( $product_id ) {
+		$product_id = intval( $product_id );
+		$categories = array();
+
+		if ( $product_id > 0 ) {
+			$categories = wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) );
+		}
+
+		if ( is_wp_error( $categories ) || empty( $categories ) ) {
+			$categories = array( get_post_meta( $product_id, 'trendyol_product_category', true ) );
+		}
+
+		foreach ( (array) $categories as $category_name ) {
+			$folder_name = sanitize_file_name( wp_strip_all_tags( (string) $category_name ) );
+			$folder_name = trim( $folder_name, '.-_' );
+
+			if ( '' !== $folder_name ) {
+				return $folder_name;
+			}
+		}
+
+		return 'kategorisiz';
 	}
 
 	private function get_attachment_export_file_path( $attachment_id ) {

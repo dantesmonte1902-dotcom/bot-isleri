@@ -36,6 +36,14 @@ $export_counts = array(
 			</select>
 		</div>
 
+		<div class="form-group">
+			<label for="featured_image_export_folder_mode">ZIP içinde nasıl sıralansın?</label>
+			<select name="featured_image_export_folder_mode" id="featured_image_export_folder_mode" class="form-control" style="max-width:260px;">
+				<option value="flat">Düz liste</option>
+				<option value="category">Kategori klasörlerine göre</option>
+			</select>
+		</div>
+
 		<div class="button-group">
 			<button type="submit" class="button button-secondary button-large">⬇️ .zip Olarak İndir</button>
 		</div>
