@@ -262,67 +262,103 @@ if ( ! function_exists( 'trendyol_extract_variants_from_html' ) ) {
 
 		$decoded_html = html_entity_decode( $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 
-		$pattern = '/"itemNumber"\s*:\s*(\d+).*?"value"\s*:\s*"([^"]+)".*?"beautifiedValue"\s*:\s*"([^"]*)".*?"inStock"\s*:\s*(true|false)/u';
+		$store_variant = static function ( &$final_rows, $value, $beautified, $in_stock ) {
+			$value      = html_entity_decode( (string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			$beautified = html_entity_decode( (string) $beautified, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			$in_stock   = (bool) $in_stock;
 
-		if ( preg_match_all( $pattern, $decoded_html, $matches, PREG_SET_ORDER ) ) {
-			foreach ( $matches as $m ) {
-				$value      = isset( $m[2] ) ? (string) $m[2] : '';
-				$beautified = isset( $m[3] ) ? (string) $m[3] : '';
-				$in_stock   = isset( $m[4] ) && strtolower( (string) $m[4] ) === 'true';
+			$norm_value      = trendyol_normalize_variant_value( $value );
+			$norm_beautified = trendyol_normalize_variant_value( $beautified );
 
-				$norm_value      = trendyol_normalize_variant_value( $value );
-				$norm_beautified = trendyol_normalize_variant_value( $beautified );
-
-				$row = array(
-					'value'           => $value,
-					'beautifiedValue' => $beautified,
-					'inStock'         => $in_stock,
-					'norm_value'      => $norm_value,
-					'norm_beautified' => $norm_beautified,
-				);
-
-				if ( ! empty( $norm_value ) ) {
-					$final[ 'value:' . $norm_value ] = $row;
-				}
-
-				if ( ! empty( $norm_beautified ) ) {
-					$final[ 'beauty:' . $norm_beautified ] = $row;
-				}
+			if ( '' === $norm_value && '' === $norm_beautified ) {
+				return;
 			}
-		}
 
-		if ( empty( $final ) ) {
-			$pattern2 = '/"value"\s*:\s*"([^"]+)".*?"beautifiedValue"\s*:\s*"([^"]*)".*?"inStock"\s*:\s*(true|false)/u';
+			$row = array(
+				'value'           => $value,
+				'beautifiedValue' => $beautified,
+				'inStock'         => $in_stock,
+				'norm_value'      => $norm_value,
+				'norm_beautified' => $norm_beautified,
+			);
 
-			if ( preg_match_all( $pattern2, $decoded_html, $matches2, PREG_SET_ORDER ) ) {
-				foreach ( $matches2 as $m ) {
-					$value      = isset( $m[1] ) ? (string) $m[1] : '';
-					$beautified = isset( $m[2] ) ? (string) $m[2] : '';
-					$in_stock   = isset( $m[3] ) && strtolower( (string) $m[3] ) === 'true';
+			if ( ! empty( $norm_value ) ) {
+				$final_rows[ 'value:' . $norm_value ] = $row;
+			}
 
-					$norm_value      = trendyol_normalize_variant_value( $value );
-					$norm_beautified = trendyol_normalize_variant_value( $beautified );
+			if ( ! empty( $norm_beautified ) ) {
+				$final_rows[ 'beauty:' . $norm_beautified ] = $row;
+			}
+		};
 
-					$row = array(
-						'value'           => $value,
-						'beautifiedValue' => $beautified,
-						'inStock'         => $in_stock,
-						'norm_value'      => $norm_value,
-						'norm_beautified' => $norm_beautified,
-					);
+		$extract_from_chunk = static function ( $chunk ) use ( &$store_variant, &$final ) {
+			$value      = '';
+			$beautified = '';
+			$in_stock   = true;
 
-					if ( ! empty( $norm_value ) ) {
-						$final[ 'value:' . $norm_value ] = $row;
-					}
+			if ( preg_match( '/"value"\s*:\s*"([^"]*?)"/u', $chunk, $value_match ) ) {
+				$value = isset( $value_match[1] ) ? (string) $value_match[1] : '';
+			}
 
-					if ( ! empty( $norm_beautified ) ) {
-						$final[ 'beauty:' . $norm_beautified ] = $row;
-					}
+			if ( preg_match( '/"beautifiedValue"\s*:\s*"([^"]*?)"/u', $chunk, $beautified_match ) ) {
+				$beautified = isset( $beautified_match[1] ) ? (string) $beautified_match[1] : '';
+			}
+
+			if ( preg_match( '/"inStock"\s*:\s*(true|false)/iu', $chunk, $stock_match ) ) {
+				$in_stock = isset( $stock_match[1] ) && 'true' === strtolower( (string) $stock_match[1] );
+			}
+
+			$store_variant( $final, $value, $beautified, $in_stock );
+		};
+
+		$patterns = array(
+			'/"itemNumber"\s*:\s*\d+.*?"value"\s*:\s*"([^"]*?)".*?"beautifiedValue"\s*:\s*"([^"]*?)".*?"inStock"\s*:\s*(true|false)/us',
+			'/"value"\s*:\s*"([^"]*?)".*?"beautifiedValue"\s*:\s*"([^"]*?)".*?"inStock"\s*:\s*(true|false)/us',
+			'/\{[^{}]*"value"\s*:\s*"[^"]*?"[^{}]*"inStock"\s*:\s*(?:true|false)[^{}]*\}/u',
+		);
+
+		foreach ( $patterns as $pattern ) {
+			if ( ! preg_match_all( $pattern, $decoded_html, $matches, PREG_SET_ORDER ) ) {
+				continue;
+			}
+
+			foreach ( $matches as $match ) {
+				$chunk = isset( $match[0] ) ? (string) $match[0] : '';
+				if ( '' === $chunk ) {
+					continue;
 				}
+
+				$extract_from_chunk( $chunk );
 			}
 		}
 
 		return array_values( $final );
+	}
+}
+
+if ( ! function_exists( 'trendyol_get_variant_display_value' ) ) {
+	function trendyol_get_variant_display_value( $variant ) {
+		if ( ! is_array( $variant ) ) {
+			return '';
+		}
+
+		$candidates = array(
+			$variant['beautifiedValue'] ?? '',
+			$variant['value'] ?? '',
+			$variant['displayValue'] ?? '',
+			$variant['label'] ?? '',
+			$variant['name'] ?? '',
+		);
+
+		foreach ( $candidates as $candidate ) {
+			$candidate = trim( wp_strip_all_tags( (string) $candidate ) );
+
+			if ( '' !== $candidate ) {
+				return html_entity_decode( $candidate, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			}
+		}
+
+		return '';
 	}
 }
 

@@ -371,17 +371,25 @@ class Trendyol_Scraper {
 			$variants = trendyol_extract_variants_from_html( $html );
 			if ( ! empty( $variants ) ) {
 				foreach ( $variants as $variant ) {
-					if ( ! empty( $variant['value'] ) ) {
-						$sizes[] = $variant['value'];
+					$variant_label = function_exists( 'trendyol_get_variant_display_value' ) ? trendyol_get_variant_display_value( $variant ) : '';
+
+					if ( '' !== $variant_label ) {
+						$sizes[] = $variant_label;
 					}
+				}
+
+				if ( ! empty( $sizes ) ) {
+					$sources['sizes'] = 'html variant extraction';
 				}
 			}
 		}
 
 		if ( empty( $sizes ) && ! empty( $envoy_data['product']['variants'] ) && is_array( $envoy_data['product']['variants'] ) ) {
 			foreach ( $envoy_data['product']['variants'] as $variant ) {
-				if ( ! empty( $variant['value'] ) ) {
-					$sizes[] = $variant['value'];
+				$variant_label = function_exists( 'trendyol_get_variant_display_value' ) ? trendyol_get_variant_display_value( $variant ) : '';
+
+				if ( '' !== $variant_label ) {
+					$sizes[] = $variant_label;
 				}
 			}
 			if ( ! empty( $sizes ) ) {
