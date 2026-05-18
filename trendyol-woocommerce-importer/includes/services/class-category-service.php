@@ -136,27 +136,25 @@ class Trendyol_Category_Service {
 	}
 
 	private function fetch_product_links( $category_url, $filename, $maxpages = 50 ) {
-		$category_url = strtok( $category_url, '?' );
 		$all_links    = array();
 
 		for ( $i = 1; $i <= $maxpages; $i++ ) {
-			$url  = $category_url . '?pi=' . $i;
+			$url  = add_query_arg( 'pi', $i, $category_url );
 			$html = $this->get_trendyol_html( $url );
 
 			if ( ! $html ) {
 				break;
 			}
 
-			preg_match_all( '#href="(/[^/"]+?/[^/"]+?-p-[0-9]+)"#i', $html, $matches );
+			$links = $this->extract_product_links_from_html( $html );
 
-			if ( ! empty( $matches[1] ) ) {
-				foreach ( $matches[1] as $rel ) {
-					$full              = 'https://www.trendyol.com' . $rel;
-					$all_links[ $full ] = true;
+			if ( ! empty( $links ) ) {
+				foreach ( $links as $link ) {
+					$all_links[ $link ] = true;
 				}
 			}
 
-			if ( empty( $matches[1] ) ) {
+			if ( empty( $links ) ) {
 				break;
 			}
 
@@ -166,5 +164,70 @@ class Trendyol_Category_Service {
 		file_put_contents( $filename, implode( "\n", array_keys( $all_links ) ) );
 
 		return count( $all_links );
+	}
+
+	private function extract_product_links_from_html( $html ) {
+		$links   = array();
+		$sources = array_unique(
+			array(
+				(string) $html,
+				str_replace(
+					array( '\\/', '\\u002F', '&quot;' ),
+					array( '/', '/', '"' ),
+					html_entity_decode( (string) $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+				),
+			)
+		);
+
+		$patterns = array(
+			'#href=(["\'])(/[^"\']+?-p-\d+)(?:\?[^"\']*)?\1#i',
+			'#https?://(?:www\.)?trendyol\.com/[^"\'\\\\\s<>]+?-p-\d+#i',
+			'#/[^"\'\\\\\s<>]+?-p-\d+#i',
+		);
+
+		foreach ( $sources as $source ) {
+			foreach ( $patterns as $pattern ) {
+				if ( ! preg_match_all( $pattern, $source, $matches ) ) {
+					continue;
+				}
+
+				$candidates = isset( $matches[2] ) && ! empty( $matches[2] ) ? $matches[2] : $matches[0];
+
+				foreach ( $candidates as $candidate ) {
+					$normalized = $this->normalize_product_link( $candidate );
+
+					if ( $normalized ) {
+						$links[ $normalized ] = true;
+					}
+				}
+			}
+		}
+
+		return array_keys( $links );
+	}
+
+	private function normalize_product_link( $url ) {
+		$url = trim( html_entity_decode( (string) $url, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$url = str_replace( array( '\\/', '\\u002F' ), '/', $url );
+
+		if ( 0 === strpos( $url, '//' ) ) {
+			$url = 'https:' . $url;
+		} elseif ( 0 === strpos( $url, '/' ) ) {
+			$url = 'https://www.trendyol.com' . $url;
+		}
+
+		$url = preg_replace( '#[?#].*$#', '', $url );
+		$url = preg_replace( '#^https?://m\.trendyol\.com/#i', 'https://www.trendyol.com/', $url );
+
+		if ( ! preg_match( '#^https?://(?:www\.)?trendyol\.com/.+?-p-\d+$#i', $url ) ) {
+			return '';
+		}
+
+		return $url;
 	}
 }
