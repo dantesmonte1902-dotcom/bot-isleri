@@ -220,15 +220,11 @@ private function process_batch( $posts, $settings, $batch_number, $batch_total )
 $prompt           = $this->build_prompt( $posts, $settings );
 $retry_limit      = intval( $settings['ai_retry_limit'] );
 $providers        = $this->get_provider_order( $settings );
-$attempt          = 0;
 $total_wait       = 0;
 $retries_used     = 0;
 $api_requests     = 0;
 $providers_used   = array();
 $last_error       = null;
-
-while ( $attempt <= $retry_limit ) {
-$retryable_error = null;
 
 foreach ( $providers as $provider_key ) {
 $provider = Trendyol_AI_Provider_Factory::create( $provider_key, $settings );
@@ -244,6 +240,7 @@ array(
 continue;
 }
 
+for ( $attempt = 0; $attempt <= $retry_limit; $attempt++ ) {
 $budget_wait = $this->enforce_request_budget( intval( $settings['ai_requests_per_minute'] ) );
 if ( $budget_wait > 0 ) {
 $total_wait += $budget_wait;
@@ -261,9 +258,61 @@ array(
 )
 );
 
-if ( ! is_wp_error( $response ) ) {
-$items = $this->map_generated_titles_to_posts( $posts, (string) $response['text'], $settings, $provider_key, $batch_number );
-$this->log_batch_result( $batch_number, $batch_total, 'success', $provider_key, $attempt, $items );
+if ( is_wp_error( $response ) ) {
+$last_error = $response;
+$response_error_data = (array) $response->get_error_data();
+$this->log_batch_result(
+$batch_number,
+$batch_total,
+'error',
+$provider_key,
+$attempt,
+array(),
+$response->get_error_message(),
+count( $posts ),
+intval( $response_error_data['output_count'] ?? 0 )
+);
+
+if ( $this->is_retryable_error( $response ) && $attempt < $retry_limit ) {
+$wait_seconds = $this->determine_retry_wait( $response, intval( $settings['ai_request_pause_seconds'] ) );
+$total_wait  += $this->sleep_for_seconds( $wait_seconds );
+$retries_used++;
+continue;
+}
+
+break;
+}
+
+$items = 1 === count( $posts )
+? $this->map_single_generated_title_to_post( reset( $posts ), (string) $response['text'], $settings, $provider_key, $batch_number )
+: $this->map_generated_titles_to_posts( $posts, (string) $response['text'], $settings, $provider_key, $batch_number );
+
+if ( is_wp_error( $items ) ) {
+$last_error = $items;
+$items_error_data = (array) $items->get_error_data();
+$this->log_batch_result(
+$batch_number,
+$batch_total,
+'error',
+$provider_key,
+$attempt,
+array(),
+$items->get_error_message(),
+count( $posts ),
+intval( $items_error_data['output_count'] ?? 0 )
+);
+
+if ( $this->is_retryable_error( $items ) && $attempt < $retry_limit ) {
+$wait_seconds = $this->determine_retry_wait( $items, intval( $settings['ai_request_pause_seconds'] ) );
+$total_wait  += $this->sleep_for_seconds( $wait_seconds );
+$retries_used++;
+continue;
+}
+
+break;
+}
+
+$this->log_batch_result( $batch_number, $batch_total, 'success', $provider_key, $attempt, $items, '', count( $posts ), count( $items ) );
 
 $pause_wait = $this->apply_pause_between_batches( intval( $settings['ai_request_pause_seconds'] ) );
 if ( $pause_wait > 0 ) {
@@ -278,24 +327,6 @@ return array(
 'providers_used' => array_values( array_unique( $providers_used ) ),
 );
 }
-
-$last_error = $response;
-$this->log_batch_result( $batch_number, $batch_total, 'error', $provider_key, $attempt, array(), $response->get_error_message() );
-
-if ( $this->is_retryable_error( $response ) && null === $retryable_error ) {
-$retryable_error = $response;
-}
-}
-
-if ( $retryable_error instanceof WP_Error && $attempt < $retry_limit ) {
-$wait_seconds = $this->determine_retry_wait( $retryable_error, intval( $settings['ai_request_pause_seconds'] ) );
-$total_wait  += $this->sleep_for_seconds( $wait_seconds );
-$retries_used++;
-$attempt++;
-continue;
-}
-
-break;
 }
 
 return array(
@@ -308,20 +339,23 @@ return array(
 }
 
 private function get_provider_order( $settings ) {
-$order = array();
-$primary = sanitize_key( (string) $settings['ai_provider'] );
-$fallback = sanitize_key( (string) $settings['ai_fallback_provider'] );
+$available = array( 'gemini', 'openrouter', 'custom' );
+$order     = array();
+$primary   = sanitize_key( (string) $settings['ai_provider'] );
+$fallback  = sanitize_key( (string) $settings['ai_fallback_provider'] );
 
-if ( in_array( $primary, array( 'gemini', 'openrouter', 'custom' ), true ) ) {
+if ( in_array( $primary, $available, true ) ) {
 $order[] = $primary;
 }
 
-if ( in_array( $fallback, array( 'gemini', 'openrouter', 'custom' ), true ) && $fallback !== $primary ) {
+if ( in_array( $fallback, $available, true ) && ! in_array( $fallback, $order, true ) ) {
 $order[] = $fallback;
 }
 
-if ( empty( $order ) ) {
-$order[] = 'gemini';
+foreach ( $available as $provider_key ) {
+if ( ! in_array( $provider_key, $order, true ) ) {
+$order[] = $provider_key;
+}
 }
 
 return $order;
@@ -388,34 +422,44 @@ $max_length  = intval( $settings['gemini_title_max_length'] );
 $user_prompt = trim( (string) $settings['gemini_title_prompt'] );
 $language    = $settings['ai_output_language'];
 $lines       = array();
+$payload     = array();
+
+foreach ( array_values( $posts ) as $index => $post ) {
+$payload[] = array(
+'id'    => $index + 1,
+'input' => $this->build_product_input_line( $post ),
+);
+}
 
 $lines[] = sprintf( 'Aşağıdaki ürünler için %s kısa e-ticaret başlığı üret.', $language );
 $lines[] = '';
-$lines[] = 'Kurallar:';
+$lines[] = 'Sadece geçerli JSON döndür.';
+$lines[] = 'JSON formatı zorunlu olarak şu yapıda olmalı:';
+$lines[] = '[';
+$lines[] = '  {';
+$lines[] = '    "id": 1,';
+$lines[] = '    "title": "Bosnaca ürün başlığı"';
+$lines[] = '  }';
+$lines[] = ']';
 $lines[] = '';
-$lines[] = '* Maksimum ' . $max_length . ' karakter';
-$lines[] = '* SEO uyumlu';
-$lines[] = '* Sadece başlık yaz';
-$lines[] = '* Numaralandırmayı koru';
-$lines[] = '* Açıklama yazma';
-$lines[] = '* Tırnak işareti kullanma';
-$lines[] = '* Ürün sırasını değiştirme';
+$lines[] = 'Kurallar:';
+$lines[] = '- Kesinlikle açıklama yazma';
+$lines[] = '- Markdown kullanma';
+$lines[] = '- Extra text yazma';
+$lines[] = '- Sadece JSON output ver';
+$lines[] = '- Her ürün için tam 1 item döndür';
+$lines[] = '- Toplam item sayısı girişteki ürün sayısı ile aynı olmalı';
+$lines[] = '- id alanını değiştirme';
+$lines[] = '- title alanı maksimum ' . $max_length . ' karakter olsun';
+$lines[] = '- title SEO uyumlu kısa e-ticaret başlığı olsun';
 
 if ( '' !== $user_prompt ) {
-$lines[] = '* Ek mağaza kuralı: ' . $user_prompt;
+$lines[] = '- Ek mağaza kuralı: ' . $user_prompt;
 }
 
 $lines[] = '';
-
-foreach ( array_values( $posts ) as $index => $post ) {
-$lines[] = sprintf( '%d. %s', $index + 1, $this->build_product_input_line( $post ) );
-}
-
-$lines[] = '';
-$lines[] = 'Beklenen çıktı formatı:';
-for ( $index = 1; $index <= min( 3, count( $posts ) ); $index++ ) {
-$lines[] = $index . '. Başlık';
-}
+$lines[] = 'Ürünler JSON:';
+$lines[] = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
 return implode( "\n", $lines );
 }
@@ -443,72 +487,167 @@ $segments[] = 'Açıklama: ' . $this->truncate_text( preg_replace( '/\s+/', ' ',
 return implode( ' | ', array_filter( $segments ) );
 }
 
-private function map_generated_titles_to_posts( $posts, $raw_text, $settings, $provider_key, $batch_number ) {
-$parsed_titles = $this->parse_batch_response( $raw_text, count( $posts ), intval( $settings['gemini_title_max_length'] ) );
-$items         = array();
-
-foreach ( array_values( $posts ) as $index => $post ) {
-$position = $index + 1;
-$title    = isset( $parsed_titles[ $position ] ) ? $parsed_titles[ $position ] : '';
+private function map_single_generated_title_to_post( $post, $raw_text, $settings, $provider_key, $batch_number ) {
+$title = $this->sanitize_generated_title( (string) $raw_text, intval( $settings['gemini_title_max_length'] ) );
 
 if ( '' === $title ) {
-$items[] = array(
-'status'      => 'failed',
-'title'       => $post->post_title,
-'message'     => __( 'AI çıktısı ürün sırasıyla eşleştirilemedi.', 'trendyol-woocommerce-importer' ),
-'edit_url'    => get_edit_post_link( $post->ID, 'raw' ),
-'provider'    => $provider_key,
-'batch'       => $batch_number,
-'batch_index' => $position,
+return new WP_Error(
+'ai_empty_response',
+__( 'AI tekli başlık üretiminde boş yanıt döndürdü.', 'trendyol-woocommerce-importer' ),
+array(
+'type'         => 'empty_response',
+'provider'     => $provider_key,
+'input_count'  => 1,
+'output_count' => 0,
+)
 );
-continue;
 }
 
-$items[] = $this->apply_generated_title( $post, $title, $provider_key, $batch_number, $position );
+return array(
+$this->apply_generated_title( $post, $title, $provider_key, $batch_number, 1 ),
+);
+}
+
+private function map_generated_titles_to_posts( $posts, $raw_text, $settings, $provider_key, $batch_number ) {
+$post_map = array();
+$items    = array();
+
+foreach ( array_values( $posts ) as $index => $post ) {
+$post_map[ $index + 1 ] = $post;
+}
+
+$parsed_titles = $this->parse_batch_json_response(
+$raw_text,
+array_keys( $post_map ),
+intval( $settings['gemini_title_max_length'] ),
+$provider_key
+);
+
+if ( is_wp_error( $parsed_titles ) ) {
+return $parsed_titles;
+}
+
+foreach ( $post_map as $position => $post ) {
+$items[] = $this->apply_generated_title( $post, $parsed_titles[ $position ], $provider_key, $batch_number, $position );
 }
 
 return $items;
 }
 
-private function parse_batch_response( $raw_text, $expected_count, $max_length ) {
-$lines   = preg_split( '/\r\n|\r|\n/', (string) $raw_text );
-$parsed  = array();
-$fallback = array();
+private function parse_batch_json_response( $raw_text, $expected_ids, $max_length, $provider_key ) {
+$expected_ids = array_values( array_map( 'intval', (array) $expected_ids ) );
+$input_count  = count( $expected_ids );
+$raw_text     = trim( (string) $raw_text );
 
-foreach ( (array) $lines as $line ) {
-$line = trim( wp_strip_all_tags( (string) $line ) );
-if ( '' === $line ) {
-continue;
-}
-
-if (
-preg_match( '/^(kurallar|beklenen çıktı formatı)\s*:?\s*$/iu', $line ) ||
-preg_match( '/^[-*]\s+/u', $line )
-) {
-continue;
+if ( '' === $raw_text ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI boş JSON çıktısı döndürdü.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+0
+);
 }
 
-if ( preg_match( '/^(\d+)[\.)\-:]\s*(.+)$/u', $line, $matches ) ) {
-$position = intval( $matches[1] );
-if ( $position >= 1 && $position <= $expected_count ) {
-$parsed[ $position ] = $this->sanitize_generated_title( $matches[2], $max_length );
-continue;
+if ( '[' !== substr( $raw_text, 0, 1 ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI yalnızca JSON dizi döndürmeliydi.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+0
+);
+}
+
+$decoded = json_decode( $raw_text, true );
+
+if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $decoded ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısı geçerli JSON olarak parse edilemedi.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+0
+);
+}
+
+if ( count( $decoded ) !== $input_count ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısındaki item sayısı giriş ürün sayısıyla eşleşmiyor.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
+}
+
+$parsed_titles = array();
+
+foreach ( $decoded as $item ) {
+if ( ! is_array( $item ) || ! array_key_exists( 'id', $item ) || ! array_key_exists( 'title', $item ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısındaki item yapısı geçersiz.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
+}
+
+$item_id = intval( $item['id'] );
+if ( ! in_array( $item_id, $expected_ids, true ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısında beklenmeyen id bulundu.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
+}
+
+if ( isset( $parsed_titles[ $item_id ] ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısında aynı id birden fazla kez döndü.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
+}
+
+$title = $this->sanitize_generated_title( (string) $item['title'], $max_length );
+if ( '' === $title ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısındaki title alanı boş.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
+}
+
+$parsed_titles[ $item_id ] = $title;
+}
+
+foreach ( $expected_ids as $expected_id ) {
+if ( ! isset( $parsed_titles[ $expected_id ] ) ) {
+return $this->build_invalid_batch_response_error(
+__( 'AI çıktısında bazı ürün id değerleri eksik.', 'trendyol-woocommerce-importer' ),
+$provider_key,
+$input_count,
+count( $decoded )
+);
 }
 }
 
-$fallback[] = $this->sanitize_generated_title( $line, $max_length );
+ksort( $parsed_titles );
+
+return $parsed_titles;
 }
 
-if ( count( $parsed ) < $expected_count && count( $fallback ) >= $expected_count ) {
-for ( $i = 1; $i <= $expected_count; $i++ ) {
-if ( empty( $parsed[ $i ] ) && ! empty( $fallback[ $i - 1 ] ) ) {
-$parsed[ $i ] = $fallback[ $i - 1 ];
-}
-}
-}
-
-ksort( $parsed );
-return $parsed;
+private function build_invalid_batch_response_error( $message, $provider_key, $input_count, $output_count ) {
+return new WP_Error(
+'ai_invalid_batch_response',
+$message,
+array(
+'type'         => 'invalid_response',
+'provider'     => $provider_key,
+'input_count'  => intval( $input_count ),
+'output_count' => intval( $output_count ),
+)
+);
 }
 
 private function apply_generated_title( $post, $generated_title, $provider_key, $batch_number, $position ) {
@@ -587,7 +726,7 @@ return false;
 }
 
 $type = $error->get_error_data()['type'] ?? '';
-return in_array( $type, array( 'rate_limit', 'transient' ), true );
+return in_array( $type, array( 'rate_limit', 'transient', 'invalid_response' ), true );
 }
 
 private function determine_retry_wait( $error, $default_pause ) {
@@ -646,14 +785,16 @@ sleep( $seconds );
 return $seconds;
 }
 
-private function log_batch_result( $batch_number, $batch_total, $status, $provider_key, $attempt, $items = array(), $message = '' ) {
+private function log_batch_result( $batch_number, $batch_total, $status, $provider_key, $attempt, $items = array(), $message = '', $input_count = 0, $output_count = 0 ) {
 $summary = sprintf(
-'AI batch %1$d/%2$d provider=%3$s status=%4$s attempt=%5$d',
+'AI batch %1$d/%2$d provider=%3$s status=%4$s attempt=%5$d input_count=%6$d output_count=%7$d',
 intval( $batch_number ),
 intval( $batch_total ),
 $provider_key,
 $status,
-intval( $attempt ) + 1
+intval( $attempt ) + 1,
+intval( $input_count ),
+intval( $output_count )
 );
 
 if ( '' !== $message ) {
@@ -673,6 +814,8 @@ array(
 'batch_total'  => intval( $batch_total ),
 'provider'     => $provider_key,
 'attempt'      => intval( $attempt ) + 1,
+'input_count'  => intval( $input_count ),
+'output_count' => intval( $output_count ),
 'items'        => $items,
 )
 );
