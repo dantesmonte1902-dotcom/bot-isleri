@@ -109,20 +109,23 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
 
 21. Admin paneline yeni sekme eklendi: Tarayıcı Otomasyonu
     admin.php?page=trendyol-importer&tab=browser-automation
-    Bu sekmede amaç doğrudan WordPress içinde Playwright çalıştırmak değil;
-    gerçek tarayıcı ile dışarıda alınan çıktıyı WordPress içine güvenli ve pratik şekilde kaydetmektir.
+    Bu sekme artık iki mod sunar:
+    - Sunucuda Node.js + Playwright varsa kategori adı ve kategori linki ile doğrudan çekim
+    - İstenirse manuel JSON / link listesi / HTML yapıştırarak kayıt
     Sekme şunları sağlar:
-    - Hazır bir Playwright örnek scripti gösterir
-    - Kategori adı + kaynak URL + link listesi / JSON + HTML yapıştırma alanı sunar
-    - Yapıştırılan içerikten Trendyol ürün linklerini ayıklar
+    - Kategoriler sekmesine benzer şekilde kategori adı + kategori linki eklemeyi sağlar
+    - Kaydedilen satırlarda "Ürün Linklerini Çek" aksiyonu sunar
+    - Sunucuda Playwright kuruluysa gerçek tarayıcı ile sayfaları gezip linkleri toplar
+    - Alternatif olarak yapıştırılan içerikten Trendyol ürün linklerini ayıklar
     - Sonucu data klasörüne [kategori]-urunleri.txt olarak kaydeder
     - Böylece Toplu Ekle sekmesinde hemen kullanılabilir hale getirir
 
 22. Yeni tabın pratik kullanım akışı
-    1) Tarayıcı otomasyonu sekmesindeki Playwright örneğini kendi Node/Playwright ortamında çalıştır
-    2) Çıkan JSON link listesini veya tarayıcıdan alınan HTML'yi sekmeye yapıştır
-    3) Kategori adını gir ve kaydet
+    1) Tarayıcı otomasyonu sekmesinde kategori adını ve kategori linkini ekle
+    2) Sunucuda Playwright varsa "Ürün Linklerini Çek" düğmesine bas
+    3) Sistem gerçek tarayıcı ile ürün linklerini toplayıp txt dosyasına kaydeder
     4) Oluşan txt dosyasını Toplu Ekle sekmesinde kullan
+    Eğer sunucuda Playwright kurulu değilse aynı sekmedeki manuel yapıştırma alanları yedek olarak kullanılabilir.
     Bu yapı, canlı /sr sayfasını WordPress-PHP ile çekmeye çalışmaktan daha kontrollü bir çözümdür.
 
 Değişen dosyalar
