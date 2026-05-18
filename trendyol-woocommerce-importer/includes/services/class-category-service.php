@@ -196,16 +196,7 @@ class Trendyol_Category_Service {
 
 	private function extract_product_links_from_html( $html ) {
 		$links   = array();
-		$sources = array_unique(
-			array(
-				(string) $html,
-				str_replace(
-					array( '\\/', '\\u002F', '&quot;' ),
-					array( '/', '/', '"' ),
-					html_entity_decode( (string) $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' )
-				),
-			)
-		);
+		$sources = $this->get_html_sources( $html );
 
 		$patterns = array(
 			'#href=(["\'])(/[^"\']+?-p-\d+)(?:\?[^"\']*)?\1#i',
@@ -240,9 +231,12 @@ class Trendyol_Category_Service {
 
 	private function extract_json_ld_product_links( $html ) {
 		$links = array();
-		$html  = (string) $html;
 
-		if ( preg_match_all( '#<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', $html, $matches ) ) {
+		foreach ( $this->get_html_sources( $html ) as $source ) {
+			if ( ! preg_match_all( '#<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', $source, $matches ) ) {
+				continue;
+			}
+
 			foreach ( $matches[1] as $json_ld ) {
 				$json_ld = trim( html_entity_decode( (string) $json_ld, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 
@@ -258,7 +252,7 @@ class Trendyol_Category_Service {
 					}
 				}
 
-				if ( preg_match_all( '#"url"\s*:\s*"((?:https?:)?\\\\?/\\\\?/(?:www\\\\?\.)?trendyol\\\\?\.com/[^"]+?-p-\d+|https?://(?:www\.)?trendyol\.com/[^"]+?-p-\d+)"#i', $json_ld, $url_matches ) ) {
+				if ( preg_match_all( '#"url"\s*:\s*"((?:https?://(?:www\.)?trendyol\.com|(?:https?:)?\\\\?/\\\\?/(?:www\\\\?\.)?trendyol\\\\?\.com|\\\\?/|/)[^"]+?-p-\d+)"#i', $json_ld, $url_matches ) ) {
 					foreach ( $url_matches[1] as $url ) {
 						$normalized = $this->normalize_product_link( $url );
 
@@ -271,6 +265,62 @@ class Trendyol_Category_Service {
 		}
 
 		return array_keys( $links );
+	}
+
+	private function get_html_sources( $html ) {
+		$html    = (string) $html;
+		$sources = array( $html );
+		$decoded = str_replace(
+			array( '\\/', '\\u002F', '&quot;' ),
+			array( '/', '/', '"' ),
+			html_entity_decode( $html, ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+		);
+
+		$sources[] = $decoded;
+
+		foreach ( array( $html, $decoded ) as $candidate ) {
+			$reconstructed = $this->extract_saved_source_html( $candidate );
+
+			if ( '' === $reconstructed ) {
+				continue;
+			}
+
+			$sources[] = $reconstructed;
+			$sources[] = str_replace(
+				array( '\\/', '\\u002F', '&quot;' ),
+				array( '/', '/', '"' ),
+				html_entity_decode( $reconstructed, ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+			);
+		}
+
+		return array_values( array_unique( array_filter( $sources ) ) );
+	}
+
+	private function extract_saved_source_html( $html ) {
+		$html = (string) $html;
+
+		if ( false === strpos( $html, 'line-content' ) ) {
+			return '';
+		}
+
+		if ( ! preg_match_all( '#<td class="line-content">(.*?)</td>#is', $html, $matches ) ) {
+			return '';
+		}
+
+		$lines = array();
+
+		foreach ( $matches[1] as $line_html ) {
+			$line = wp_strip_all_tags( (string) $line_html );
+			$line = html_entity_decode( $line, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			$line = str_replace( "\xc2\xa0", ' ', $line );
+			$line = rtrim( $line );
+
+			$lines[] = $line;
+		}
+
+		$reconstructed = trim( implode( "\n", $lines ) );
+
+		return strlen( $reconstructed ) > 100 ? $reconstructed : '';
 	}
 
 	private function collect_product_urls_from_schema( $data ) {
@@ -337,7 +387,7 @@ class Trendyol_Category_Service {
 			$url = 'https://www.trendyol.com' . $url;
 		}
 
-		$url = preg_replace( '#[?#].*$#', '', $url );
+		$url = preg_replace( '#[?\#].*$#', '', $url );
 		$url = preg_replace( '#^https?://m\.trendyol\.com/#i', 'https://www.trendyol.com/', $url );
 
 		if ( ! preg_match( '#^https?://(?:www\.)?trendyol\.com/.+?-p-\d+$#i', $url ) ) {
