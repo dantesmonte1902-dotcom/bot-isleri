@@ -112,35 +112,45 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     Bu sekme artık iki mod sunar:
     - Sunucuda Node.js + Playwright varsa kategori adı ve kategori linki ile doğrudan çekim
     - İstenirse manuel JSON / link listesi / HTML yapıştırarak kayıt
+    Ayrıca sekme içinde yeni "Browser Automation Settings" bölümü vardır:
+    - Manual Node.js Binary Path
+    - Working Directory
+    - Enable Manual Node Path
+    - Test Node.js
+    - Test Playwright
+    - Son test sonucu
     Sekme şunları sağlar:
     - Kategoriler sekmesine benzer şekilde kategori adı + kategori linki eklemeyi sağlar
     - Kaydedilen satırlarda "Ürün Linklerini Çek" aksiyonu sunar
-    - Sunucuda Playwright kuruluysa gerçek tarayıcı ile sayfaları gezip linkleri toplar
+    - Manuel Node.js yolu varsa önce onu, sonra PATH içindeki node'u, sonra fallback yolları dener
+    - Working Directory içinde `require('playwright')` ve `chromium.launch()` testi yapar
     - Alternatif olarak yapıştırılan içerikten Trendyol ürün linklerini ayıklar
     - Sonucu data klasörüne [kategori]-urunleri.txt olarak kaydeder
     - Böylece Toplu Ekle sekmesinde hemen kullanılabilir hale getirir
 
 22. Yeni tabın pratik kullanım akışı
-    1) Tarayıcı otomasyonu sekmesinde kategori adını ve kategori linkini ekle
-    2) Sunucuda Playwright varsa "Ürün Linklerini Çek" düğmesine bas
-    3) Sistem gerçek tarayıcı ile ürün linklerini toplayıp txt dosyasına kaydeder
-    4) Oluşan txt dosyasını Toplu Ekle sekmesinde kullan
+    1) Tarayıcı otomasyonu sekmesinde gerekirse Node.js Binary Path ve Working Directory ayarlarını gir
+    2) "Test Node.js" ve "Test Playwright" ile ortamı doğrula
+    3) Kategori adını ve kategori linkini ekle
+    4) "Ürün Linklerini Çek" düğmesine bas
+    5) Sistem gerçek tarayıcı ile ürün linklerini toplayıp txt dosyasına kaydeder
+    6) Oluşan txt dosyasını Toplu Ekle sekmesinde kullan
     Eğer sunucuda Playwright kurulu değilse aynı sekmedeki manuel yapıştırma alanları yedek olarak kullanılabilir.
     Bu yapı, canlı /sr sayfasını WordPress-PHP ile çekmeye çalışmaktan daha kontrollü bir çözümdür.
 
 23. Node.js ve Playwright nereye kurulmalı?
     Eklentinin görebilmesi için kurulum WordPress'i çalıştıran AYNI sunucuda olmalıdır.
     Yani kendi bilgisayarınıza kurmanız yetmez; kurulum web sitenizin barındığı sunucuda yapılmalıdır.
-    Eklenti şu yolları kontrol eder:
+    Yeni sistem şu sırayla dener:
+    - Admin tarafından girilen manual Node.js Binary Path
     - PATH içindeki `node`
-    - `/usr/bin/node`
-    - `/usr/local/bin/node`
-    Bu yüzden Node.js sunucuda bu yollardan biriyle erişilebilir olmalıdır.
-    Playwright da yine aynı sunucuda, aynı Node.js ortamında kurulu olmalıdır; `node` komutu çalıştığında `require('playwright')` başarılı olmalıdır.
+    - Fallback yollar (`/usr/bin/node`, `/usr/local/bin/node`, Windows node.exe konumları)
+    Playwright ise seçilen Working Directory içinde test edilir.
+    Yani `node_modules/playwright` klasörü bu çalışma dizininden erişilebilir olmalıdır.
     Kısacası:
     - WordPress başka sunucuda, Node.js başka sunucuda olursa eklenti göremez
     - Node.js ve Playwright, WordPress/PHP'nin çalıştığı sunucuda olmalıdır
-    - Sunucuda terminalden `node -v` ve `node -e "require('playwright'); console.log('ok')"` çalışıyorsa eklenti de büyük olasılıkla görebilir
+    - Sunucuda terminalden `node -v`, `node -e "require('playwright'); console.log('PLAYWRIGHT_OK')"` ve gerekiyorsa `npx playwright install chromium` çalışıyorsa eklenti de büyük olasılıkla görebilir
 
 Değişen dosyalar
 ----------------
