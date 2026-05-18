@@ -67,6 +67,18 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
 16. OpenAI uyumlu provider istekleri artık kontrollü output token limiti ile gönderiliyor.
     Bu sayede OpenRouter varsayılan çok yüksek max token isteği yüzünden batch hata vermez.
 
+17. Trendyol arama / listeleme sayfalarında (örn: /sr?wg=2&wc=109&fp=true&sst=BEST_SELLER)
+    ürün linklerini regex ile ayıklamak teorik olarak mümkün olsa da asıl sorun fetch aşamasında oluşuyor.
+    Mevcut wp_remote_get ve cURL istekleri bu sayfalarda HTTP 403 dönüyor.
+    Tespit: sorun parser değil, Trendyol'un arama/listeleme sayfalarındaki bot koruması / WAF engeli.
+    Yani WordPress sunucusundan gelen basit browser-benzeri istekler HTML'yi alamadan engelleniyor.
+    /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/ty.html dosyası ise tarayıcıdan
+    manuel kaydedilmiş bir örnek olduğu için içinde ürün linki patternleri bulunabiliyor; bu canlı fetch'in
+    çalıştığını değil, sadece HTML elde edilirse linklerin ayıklanabileceğini gösteriyor.
+    Sonuç: /sr tabanlı arama sayfaları için mevcut scraper ile doğrudan canlı HTML çekmek güvenilir değil.
+    Bu tip sayfalarda veri almak için farklı bir kaynak (izinli API, tarayıcı otomasyonu veya önceden alınmış HTML)
+    gerekir.
+
 Değişen dosyalar
 ----------------
 
