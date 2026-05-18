@@ -128,6 +128,20 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     Eğer sunucuda Playwright kurulu değilse aynı sekmedeki manuel yapıştırma alanları yedek olarak kullanılabilir.
     Bu yapı, canlı /sr sayfasını WordPress-PHP ile çekmeye çalışmaktan daha kontrollü bir çözümdür.
 
+23. Node.js ve Playwright nereye kurulmalı?
+    Eklentinin görebilmesi için kurulum WordPress'i çalıştıran AYNI sunucuda olmalıdır.
+    Yani kendi bilgisayarınıza kurmanız yetmez; kurulum web sitenizin barındığı sunucuda yapılmalıdır.
+    Eklenti şu yolları kontrol eder:
+    - PATH içindeki `node`
+    - `/usr/bin/node`
+    - `/usr/local/bin/node`
+    Bu yüzden Node.js sunucuda bu yollardan biriyle erişilebilir olmalıdır.
+    Playwright da yine aynı sunucuda, aynı Node.js ortamında kurulu olmalıdır; `node` komutu çalıştığında `require('playwright')` başarılı olmalıdır.
+    Kısacası:
+    - WordPress başka sunucuda, Node.js başka sunucuda olursa eklenti göremez
+    - Node.js ve Playwright, WordPress/PHP'nin çalıştığı sunucuda olmalıdır
+    - Sunucuda terminalden `node -v` ve `node -e "require('playwright'); console.log('ok')"` çalışıyorsa eklenti de büyük olasılıkla görebilir
+
 Değişen dosyalar
 ----------------
 
