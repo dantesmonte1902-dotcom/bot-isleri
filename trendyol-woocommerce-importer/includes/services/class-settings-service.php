@@ -12,16 +12,11 @@ class Trendyol_Settings_Service {
 
 		Trendyol_Settings::set( 'import_capability', sanitize_text_field( $post_data['import_capability'] ?? 'manage_woocommerce' ) );
 		Trendyol_Settings::set( 'sync_capability', sanitize_text_field( $post_data['sync_capability'] ?? 'manage_woocommerce' ) );
-
-		// Eski ayarlar - geriye uyumluluk
 		Trendyol_Settings::set( 'enable_auto_sync', isset( $post_data['enable_auto_sync'] ) ? 1 : 0 );
 		Trendyol_Settings::set( 'sync_interval', sanitize_text_field( $post_data['sync_interval'] ?? 'daily' ) );
-
-		// Yeni cron ayarları
 		Trendyol_Settings::set( 'auto_price_update_interval', sanitize_text_field( $post_data['auto_price_update_interval'] ?? 'off' ) );
 		Trendyol_Settings::set( 'auto_stock_sync_interval', sanitize_text_field( $post_data['auto_stock_sync_interval'] ?? 'off' ) );
 		Trendyol_Settings::set( 'auto_sync_product_status', sanitize_text_field( $post_data['auto_sync_product_status'] ?? 'both' ) );
-
 		Trendyol_Settings::set( 'max_images', intval( $post_data['max_images'] ?? 10 ) );
 		Trendyol_Settings::set( 'price_markup', floatval( $post_data['price_markup'] ?? 0 ) );
 		Trendyol_Settings::set( 'sync_price', isset( $post_data['sync_price'] ) ? 1 : 0 );
@@ -39,10 +34,24 @@ class Trendyol_Settings_Service {
 		Trendyol_Settings::set( 'telegram_chat_id', sanitize_text_field( $post_data['telegram_chat_id'] ?? '' ) );
 		Trendyol_Settings::set( 'price_change_threshold', floatval( $post_data['price_change_threshold'] ?? 5 ) );
 		Trendyol_Settings::set( 'enable_change_detection', isset( $post_data['enable_change_detection'] ) ? 1 : 0 );
+		Trendyol_Settings::set( 'ai_provider', sanitize_key( $post_data['ai_provider'] ?? 'gemini' ) );
+		Trendyol_Settings::set( 'ai_fallback_provider', sanitize_key( $post_data['ai_fallback_provider'] ?? 'none' ) );
+		Trendyol_Settings::set( 'ai_batch_enabled', isset( $post_data['ai_batch_enabled'] ) ? 1 : 0 );
+		Trendyol_Settings::set( 'ai_default_processing_mode', sanitize_key( $post_data['ai_default_processing_mode'] ?? 'single' ) );
+		Trendyol_Settings::set( 'ai_batch_size', intval( $post_data['ai_batch_size'] ?? 10 ) );
+		Trendyol_Settings::set( 'ai_retry_limit', intval( $post_data['ai_retry_limit'] ?? 2 ) );
+		Trendyol_Settings::set( 'ai_request_pause_seconds', intval( $post_data['ai_request_pause_seconds'] ?? 12 ) );
+		Trendyol_Settings::set( 'ai_requests_per_minute', intval( $post_data['ai_requests_per_minute'] ?? 5 ) );
+		Trendyol_Settings::set( 'ai_output_language', sanitize_text_field( $post_data['ai_output_language'] ?? 'Boşnakça' ) );
 		Trendyol_Settings::set( 'gemini_api_key', sanitize_text_field( $post_data['gemini_api_key'] ?? '' ) );
 		Trendyol_Settings::set( 'gemini_model', sanitize_text_field( $post_data['gemini_model'] ?? 'gemini-2.5-flash' ) );
 		Trendyol_Settings::set( 'gemini_title_prompt', sanitize_textarea_field( $post_data['gemini_title_prompt'] ?? '' ) );
-		Trendyol_Settings::set( 'gemini_title_max_length', intval( $post_data['gemini_title_max_length'] ?? 110 ) );
+		Trendyol_Settings::set( 'gemini_title_max_length', intval( $post_data['gemini_title_max_length'] ?? 160 ) );
+		Trendyol_Settings::set( 'openrouter_api_key', sanitize_text_field( $post_data['openrouter_api_key'] ?? '' ) );
+		Trendyol_Settings::set( 'openrouter_model', sanitize_text_field( $post_data['openrouter_model'] ?? '' ) );
+		Trendyol_Settings::set( 'custom_ai_api_url', esc_url_raw( $post_data['custom_ai_api_url'] ?? '' ) );
+		Trendyol_Settings::set( 'custom_ai_api_key', sanitize_text_field( $post_data['custom_ai_api_key'] ?? '' ) );
+		Trendyol_Settings::set( 'custom_ai_model', sanitize_text_field( $post_data['custom_ai_model'] ?? '' ) );
 
 		update_option(
 			'trendyol_blocked_brands',

@@ -38,6 +38,7 @@ $required_files = array(
 	'includes/services/class-import-service.php',
 	'includes/services/class-bulk-import-service.php',
 	'includes/services/class-settings-service.php',
+	'includes/services/class-ai-provider.php',
 	'includes/services/class-kargo-service.php',
 	'includes/services/class-category-service.php',
 	'includes/services/class-title-bulk-update-service.php',
