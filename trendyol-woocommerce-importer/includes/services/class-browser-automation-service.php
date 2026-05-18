@@ -119,7 +119,12 @@ $this->save_last_test_result( 'error', $node_check->get_error_message() );
 return $node_check;
 }
 
-$playwright_check = $this->run_node_command( $this->build_inline_node_eval_command( $this->get_playwright_require_script() ) );
+$playwright_check = $this->run_node_command(
+array(
+'script'          => $this->get_playwright_require_script(),
+'filename_prefix' => 'playwright-require-test',
+)
+);
 
 if ( is_wp_error( $playwright_check ) ) {
 if ( $persist_result ) {
@@ -139,7 +144,12 @@ $this->save_last_test_result( 'error', $error->get_error_message(), $playwright_
 return $error;
 }
 
-$browser_check = $this->run_node_command( $this->build_inline_node_eval_command( $this->get_chromium_launch_script() ) );
+$browser_check = $this->run_node_command(
+array(
+'script'          => $this->get_chromium_launch_script(),
+'filename_prefix' => 'playwright-chromium-test',
+)
+);
 
 if ( is_wp_error( $browser_check ) ) {
 if ( $persist_result ) {
@@ -459,7 +469,12 @@ return $runtime_check;
 }
 
 $script = $this->build_runtime_playwright_script( $source_url, $maxpages );
-$result = $this->run_node_command( $this->build_inline_node_eval_command( $script ) );
+$result = $this->run_node_command(
+array(
+'script'          => $script,
+'filename_prefix' => 'playwright-fetch-links',
+)
+);
 
 if ( is_wp_error( $result ) ) {
 return $result;
@@ -578,19 +593,42 @@ if ( is_wp_error( $working_directory ) ) {
 return $working_directory;
 }
 
+$temp_script_path = '';
+$command_parts    = array( $node_binary );
+
+if ( is_array( $command ) && isset( $command['script'] ) ) {
+$temp_script_path = $this->create_temporary_node_script(
+(string) $command['script'],
+$working_directory,
+isset( $command['filename_prefix'] ) ? (string) $command['filename_prefix'] : 'browser-automation-script'
+);
+
+if ( is_wp_error( $temp_script_path ) ) {
+return $temp_script_path;
+}
+
+$command_parts[] = $temp_script_path;
+} else {
 $command = trim( (string) $command );
 
 if ( '' === $command ) {
 return new WP_Error( 'empty_node_command', 'Çalıştırılacak Node.js komutu boş olamaz.' );
 }
 
-$full_command = escapeshellarg( $node_binary ) . ' ' . $command;
-$result       = $this->run_process_command( $full_command, $working_directory );
+$command_parts[] = $command;
+}
+
+$result = $this->run_process_command( $command_parts, $working_directory );
+
+if ( '' !== $temp_script_path ) {
+$this->cleanup_temporary_node_script( $temp_script_path );
+}
 
 if ( is_wp_error( $result ) ) {
 return $result;
 }
 
+$result['command']           = $this->build_command_display( $command_parts );
 $result['node_binary']       = $node_binary;
 $result['working_directory'] = $working_directory;
 
@@ -601,14 +639,14 @@ return new WP_Error( 'browser_automation_failed', $this->get_node_command_failur
 return $result;
 }
 
-private function run_process_command( $command, $working_directory = '' ) {
+private function run_process_command( array $command_parts, $working_directory = '' ) {
 $descriptors = array(
 0 => array( 'pipe', 'r' ),
 1 => array( 'pipe', 'w' ),
 2 => array( 'pipe', 'w' ),
 );
 $cwd         = '' !== $working_directory ? $working_directory : null;
-$process     = proc_open( $command, $descriptors, $pipes, $cwd );
+$process     = proc_open( $command_parts, $descriptors, $pipes, $cwd );
 
 if ( ! is_resource( $process ) ) {
 return new WP_Error( 'process_start_failed', 'Browser automation işlemi başlatılamadı.' );
@@ -628,11 +666,88 @@ return new WP_Error( 'process_pipe_failed', 'Browser automation çıktı kanalla
 $exit_code = proc_close( $process );
 
 return array(
-'command'    => $command,
+'command'    => $this->build_command_display( $command_parts ),
 'stdout'     => (string) $stdout,
 'stderr'     => (string) $stderr,
 'exit_code'  => (int) $exit_code,
 );
+}
+
+private function create_temporary_node_script( $script, $working_directory, $filename_prefix ) {
+$script = (string) $script;
+
+if ( '' === trim( $script ) ) {
+return new WP_Error( 'empty_node_script', 'Geçici Node.js script içeriği boş olamaz.' );
+}
+
+$target_directory = $this->get_temporary_script_directory( $working_directory );
+
+if ( is_wp_error( $target_directory ) ) {
+return $target_directory;
+}
+
+$filename    = sanitize_file_name( $filename_prefix . '-' . wp_generate_password( 8, false, false ) . '.js' );
+$script_path = trailingslashit( $target_directory ) . $filename;
+$written     = file_put_contents( $script_path, $script );
+
+if ( false === $written ) {
+return new WP_Error( 'temp_script_write_failed', 'Geçici Node.js script dosyası oluşturulamadı: ' . $script_path );
+}
+
+return wp_normalize_path( $script_path );
+}
+
+private function get_temporary_script_directory( $working_directory ) {
+$candidates = array();
+
+if ( '' !== $working_directory ) {
+$candidates[] = $working_directory;
+}
+
+$candidates[] = $this->data_dir;
+$candidates[] = sys_get_temp_dir();
+
+foreach ( $candidates as $candidate ) {
+$candidate = wp_normalize_path( (string) $candidate );
+
+if ( '' === $candidate || ! is_dir( $candidate ) || ! is_writable( $candidate ) ) {
+continue;
+}
+
+return $candidate;
+}
+
+return new WP_Error( 'temp_script_directory_missing', 'Geçici Node.js script dosyası için yazılabilir dizin bulunamadı.' );
+}
+
+private function cleanup_temporary_node_script( $script_path ) {
+$script_path = wp_normalize_path( (string) $script_path );
+
+if ( '' !== $script_path && file_exists( $script_path ) ) {
+wp_delete_file( $script_path );
+}
+}
+
+private function build_command_display( array $command_parts ) {
+$display_parts = array();
+
+foreach ( $command_parts as $command_part ) {
+$display_parts[] = $this->quote_command_display_part( (string) $command_part );
+}
+
+return implode( ' ', $display_parts );
+}
+
+private function quote_command_display_part( $command_part ) {
+if ( '' === $command_part ) {
+return '""';
+}
+
+if ( preg_match( '/[\s"\']/', $command_part ) ) {
+return '"' . str_replace( '"', '\"', $command_part ) . '"';
+}
+
+return $command_part;
 }
 
 private function resolve_node_binary() {
@@ -957,10 +1072,6 @@ return $line;
 }
 
 return 'Bilinmeyen sürüm';
-}
-
-private function build_inline_node_eval_command( $script ) {
-return '-e ' . escapeshellarg( (string) $script );
 }
 
 private function get_playwright_require_script() {
