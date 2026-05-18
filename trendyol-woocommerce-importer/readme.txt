@@ -97,6 +97,16 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     "Canlı /sr sayfasını sadece PHP ile sürekli ve garantili çekmek" bu vaka için kesin çözüm değildir.
     "Kalıcı ve anlaşılır çözüm" olarak bu dosyada tutulması gereken öneri, API / browser katmanı / hazır link listesi üçlüsüdür.
 
+20. "PHP hariç kesin çözüm var mı?" sorusunun kısa cevabı: evet, PHP dışı tarafta daha sağlam çözümler vardır.
+    En net öneri sırası:
+    - Resmi / izinli API varsa onu kullanmak
+    - Gerçek tarayıcı otomasyonu (Playwright, Puppeteer, Selenium benzeri) ile listeyi almak
+    - Ayrı bir scraping servisi / worker kurup ürün linklerini orada toplamak
+    - Bu servis çıktısını WordPress'e JSON, CSV veya ürün link listesi olarak vermek
+    Yani kesin çözüme en yakın yaklaşım, fetch işlemini WordPress içindeki basit PHP request katmanından çıkarmaktır.
+    Bu vaka için PHP hariç tarafta "browser automation + ayrı servis + düzenli veri aktarımı" modeli,
+    canlı /sr sayfasını doğrudan WordPress-PHP ile çekmeye göre çok daha stabil ve sürdürülebilir çözümdür.
+
 Değişen dosyalar
 ----------------
 
