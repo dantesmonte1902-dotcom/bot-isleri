@@ -217,14 +217,27 @@ return $posts;
 }
 
 private function process_batch( $posts, $settings, $batch_number, $batch_total ) {
-$prompt           = $this->build_prompt( $posts, $settings );
-$retry_limit      = intval( $settings['ai_retry_limit'] );
-$providers        = $this->get_provider_order( $settings );
-$total_wait       = 0;
-$retries_used     = 0;
-$api_requests     = 0;
-$providers_used   = array();
-$last_error       = null;
+$prompt         = $this->build_prompt( $posts, $settings );
+$retry_limit    = intval( $settings['ai_retry_limit'] );
+$total_wait     = 0;
+$retries_used   = 0;
+$api_requests   = 0;
+$providers_used = array();
+$last_error     = null;
+$is_batch_mode  = count( $posts ) > 1;
+$providers      = $is_batch_mode ? $this->get_valid_batch_provider_order( $settings, $batch_number, $batch_total, count( $posts ) ) : $this->get_provider_order( $settings );
+
+if ( empty( $providers ) ) {
+$last_error = new WP_Error(
+'ai_provider_not_configured',
+__( 'Geçerli bir AI provider yapılandırması bulunamadı.', 'trendyol-woocommerce-importer' ),
+array(
+'type'        => 'config',
+'provider'    => '',
+'input_count' => count( $posts ),
+)
+);
+}
 
 foreach ( $providers as $provider_key ) {
 $provider = Trendyol_AI_Provider_Factory::create( $provider_key, $settings );
@@ -359,6 +372,28 @@ $order[] = $provider_key;
 }
 
 return $order;
+}
+
+private function get_valid_batch_provider_order( $settings, $batch_number, $batch_total, $input_count ) {
+$providers       = $this->get_provider_order( $settings );
+$valid_providers = array();
+
+foreach ( $providers as $provider_key ) {
+$provider = Trendyol_AI_Provider_Factory::create( $provider_key, $settings );
+if ( ! $provider ) {
+continue;
+}
+
+$issues = array_values( array_filter( array_map( 'sanitize_text_field', (array) $provider->get_configuration_issues() ) ) );
+if ( empty( $issues ) ) {
+$valid_providers[] = $provider_key;
+continue;
+}
+
+$this->log_provider_skip( $batch_number, $batch_total, $provider_key, $issues, $input_count );
+}
+
+return array_values( array_unique( $valid_providers ) );
 }
 
 private function build_prompt( $posts, $settings ) {
@@ -817,6 +852,39 @@ array(
 'input_count'  => intval( $input_count ),
 'output_count' => intval( $output_count ),
 'items'        => $items,
+)
+);
+}
+
+private function log_provider_skip( $batch_number, $batch_total, $provider_key, $issues, $input_count ) {
+$issues = array_values( array_filter( array_map( 'sanitize_text_field', (array) $issues ) ) );
+$reason = implode( ', ', $issues );
+
+$summary = sprintf(
+'AI batch %1$d/%2$d provider=%3$s status=skipped input_count=%4$d reason=%5$s',
+intval( $batch_number ),
+intval( $batch_total ),
+$provider_key,
+intval( $input_count ),
+$reason
+);
+
+$this->logger->log(
+'sync',
+'ai_title_batch',
+'error',
+$summary,
+null,
+null,
+null,
+array(
+'batch_number' => intval( $batch_number ),
+'batch_total'  => intval( $batch_total ),
+'provider'     => $provider_key,
+'input_count'  => intval( $input_count ),
+'output_count' => 0,
+'status'       => 'skipped',
+'reasons'      => $issues,
 )
 );
 }

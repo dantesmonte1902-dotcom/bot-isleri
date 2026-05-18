@@ -19,6 +19,10 @@ abstract public function is_configured();
 
 abstract public function generate_text( $prompt, $options = array() );
 
+	public function get_configuration_issues() {
+		return array();
+	}
+
 protected function get_setting( $key, $default = '' ) {
 return isset( $this->settings[ $key ] ) ? $this->settings[ $key ] : $default;
 }
@@ -146,9 +150,19 @@ public function get_label() {
 return 'Gemini';
 }
 
-public function is_configured() {
-return '' !== trim( (string) $this->get_setting( 'gemini_api_key', '' ) );
-}
+	public function is_configured() {
+	return '' !== trim( (string) $this->get_setting( 'gemini_api_key', '' ) );
+	}
+
+	public function get_configuration_issues() {
+		$issues = array();
+
+		if ( '' === trim( (string) $this->get_setting( 'gemini_api_key', '' ) ) ) {
+			$issues[] = 'missing api key';
+		}
+
+		return $issues;
+	}
 
 public function generate_text( $prompt, $options = array() ) {
 $api_key = trim( (string) $this->get_setting( 'gemini_api_key', '' ) );
@@ -261,16 +275,46 @@ return 'OpenRouter';
 return 'Custom AI';
 }
 
-public function is_configured() {
-if ( 'openrouter' === $this->provider_key ) {
-return '' !== trim( (string) $this->get_setting( 'openrouter_api_key', '' ) )
-&& '' !== trim( (string) $this->get_setting( 'openrouter_model', '' ) );
-}
+	public function is_configured() {
+	if ( 'openrouter' === $this->provider_key ) {
+	return '' !== trim( (string) $this->get_setting( 'openrouter_api_key', '' ) )
+	&& '' !== trim( (string) $this->get_setting( 'openrouter_model', '' ) );
+	}
 
-return '' !== trim( (string) $this->get_setting( 'custom_ai_api_url', '' ) )
-&& '' !== trim( (string) $this->get_setting( 'custom_ai_api_key', '' ) )
-&& '' !== trim( (string) $this->get_setting( 'custom_ai_model', '' ) );
-}
+	return '' !== trim( (string) $this->get_setting( 'custom_ai_api_url', '' ) )
+	&& '' !== trim( (string) $this->get_setting( 'custom_ai_api_key', '' ) )
+	&& '' !== trim( (string) $this->get_setting( 'custom_ai_model', '' ) );
+	}
+
+	public function get_configuration_issues() {
+		$issues = array();
+
+		if ( 'openrouter' === $this->provider_key ) {
+			if ( '' === trim( (string) $this->get_setting( 'openrouter_api_key', '' ) ) ) {
+				$issues[] = 'missing api key';
+			}
+
+			if ( '' === trim( (string) $this->get_setting( 'openrouter_model', '' ) ) ) {
+				$issues[] = 'missing model';
+			}
+
+			return $issues;
+		}
+
+		if ( '' === trim( (string) $this->get_setting( 'custom_ai_api_key', '' ) ) ) {
+			$issues[] = 'missing api key';
+		}
+
+		if ( '' === trim( (string) $this->get_setting( 'custom_ai_api_url', '' ) ) ) {
+			$issues[] = 'missing endpoint';
+		}
+
+		if ( '' === trim( (string) $this->get_setting( 'custom_ai_model', '' ) ) ) {
+			$issues[] = 'missing model';
+		}
+
+		return $issues;
+	}
 
 private function get_endpoint() {
 if ( 'openrouter' === $this->provider_key ) {

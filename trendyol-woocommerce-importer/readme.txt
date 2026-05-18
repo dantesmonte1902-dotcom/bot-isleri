@@ -52,6 +52,18 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
 
 12. Admin paneldeki mevcut AI batch ayarları kullanılmaya devam ediyor.
 
+13. Batch fallback zinciri güvenli hale getirildi.
+    Eksik yapılandırmalı provider'lar artık request atmadan otomatik skip ediliyor.
+
+14. Provider skip sebepleri loglanıyor.
+    Örnek nedenler:
+    - missing api key
+    - missing endpoint
+    - missing model
+
+15. Batch modunda fallback listesi sadece geçerli provider'lardan kuruluyor.
+    Bu sayede boş Custom AI ayarları tüm batch işlemini fail etmiyor.
+
 Değişen dosyalar
 ----------------
 
