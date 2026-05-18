@@ -322,6 +322,7 @@ $target_url = 'https://www.trendyol.com/sr?q=ornek';
 
 $encoded_url = wp_json_encode( $target_url );
 $template    = <<<'SCRIPT'
+const fs = require('fs');
 const { chromium } = require('playwright');
 
 (async () => {
@@ -333,18 +334,89 @@ const { chromium } = require('playwright');
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   });
 
-  const allLinks = new Set();
-  const collectRawProductLinks = async () => {
-    const anchorLinks = await page.locator('a').evaluateAll((anchors) =>
-      anchors.flatMap((anchor) => [anchor.href || '', anchor.getAttribute('href') || '']).filter(Boolean)
-    );
-    const html = await page.content();
-    const absoluteMatches = html.match(/https?:\/\/(?:www\.)?trendyol\.com\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
-    const relativeMatches = html.match(/\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90000);
 
-    return Array.from(new Set(anchorLinks.concat(absoluteMatches, relativeMatches)))
-      .map((link) => String(link).trim())
-      .filter((link) => link.includes('-p-'));
+  const allLinks = new Set();
+  const toAbsoluteUrl = (href) => {
+    if (typeof href !== 'string') {
+      return '';
+    }
+
+    const trimmedHref = href.trim();
+
+    if (!trimmedHref) {
+      return '';
+    }
+
+    if (trimmedHref.startsWith('//')) {
+      return `https:${trimmedHref}`;
+    }
+
+    if (trimmedHref.startsWith('/')) {
+      return `https://www.trendyol.com${trimmedHref}`;
+    }
+
+    return trimmedHref;
+  };
+  const collectProductLinks = async () => {
+    const links = await page.$$eval(
+      'a[data-testid="product-card"], a.product-card',
+      (elements) => elements.map((element) => element.getAttribute('href'))
+    );
+
+    return Array.from(
+      new Set(
+        links
+          .map((href) => (typeof href === 'string' ? href.trim() : ''))
+          .filter(Boolean)
+      )
+    )
+      .map((href) => {
+        if (href.startsWith('//')) {
+          return `https:${href}`;
+        }
+
+        if (href.startsWith('/')) {
+          return `https://www.trendyol.com${href}`;
+        }
+
+        return href;
+      })
+      .filter((href) => /^https?:\/\/(?:www\.)?trendyol\.com\//i.test(href));
+  };
+  const waitForNetworkIdle = async () => {
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
+    } catch (error) {
+      console.error('Network idle wait timeout, continuing...');
+    }
+  };
+  const scrollUntilNoNewLinks = async () => {
+    let previousCount = -1;
+    let stableRounds = 0;
+
+    for (let scrollIndex = 0; scrollIndex < 40; scrollIndex += 1) {
+      const currentLinks = await collectProductLinks();
+      currentLinks.forEach((link) => allLinks.add(toAbsoluteUrl(link)));
+
+      if (allLinks.size === previousCount) {
+        stableRounds += 1;
+      } else {
+        stableRounds = 0;
+        previousCount = allLinks.size;
+      }
+
+      if (stableRounds >= 2) {
+        break;
+      }
+
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await page.waitForTimeout(1500);
+      await waitForNetworkIdle();
+    }
   };
 
   for (let pageIndex = 1; pageIndex <= 50; pageIndex += 1) {
@@ -352,20 +424,33 @@ const { chromium } = require('playwright');
     const currentUrl = `${startUrl}${separator}pi=${pageIndex}`;
 
     await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
-    await page.waitForTimeout(2500);
+    await waitForNetworkIdle();
+    await page.waitForTimeout(1500);
+    await scrollUntilNoNewLinks();
 
-    const normalized = await collectRawProductLinks();
+    const normalized = await collectProductLinks();
 
     if (!normalized.length) {
       break;
     }
 
-    normalized.forEach((link) => allLinks.add(link));
+    normalized.forEach((link) => allLinks.add(toAbsoluteUrl(link)));
   }
 
-  console.log(JSON.stringify(Array.from(allLinks), null, 2));
+  const links = Array.from(allLinks).filter(Boolean);
+  const outputPath = 'product-links.txt';
+
+  fs.writeFileSync(outputPath, `${links.join('\n')}${links.length ? '\n' : ''}`, 'utf8');
+
+  console.log(`Found ${links.length} product links`);
+  console.log(`Saved to: ${outputPath}`);
+  console.log(`First 5 links: ${links.slice(0, 5).join(', ')}`);
   await browser.close();
-})();
+})().catch((error) => {
+  console.error('PLAYWRIGHT_SCRAPE_FAILED');
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
+});
 SCRIPT;
 
 return str_replace( '__TARGET_URL__', $encoded_url, $template );
@@ -438,18 +523,23 @@ return array_values( array_unique( $links ) );
 }
 
 private function save_links_to_file( $category_name, array $links, $source_url = '', array $source_types = array(), $maxpages = 0 ) {
-$filename = $this->data_dir . sanitize_title( $category_name ) . '-urunleri.txt';
-$content  = implode( "\n", array_values( array_unique( array_filter( $links ) ) ) ) . "\n";
+$filename     = $this->data_dir . sanitize_title( $category_name ) . '-urunleri.txt';
+$unique_links = array_values( array_unique( array_filter( $links ) ) );
+$content      = implode( "\n", $unique_links ) . "\n";
 
 if ( false === file_put_contents( $filename, $content ) ) {
 return new WP_Error( 'write_failed', 'Ürün linkleri dosyaya yazılamadı.' );
 }
 
+error_log( 'Found ' . count( $unique_links ) . ' product links' );
+error_log( 'Saved to: ' . $filename );
+error_log( 'First 5 links: ' . implode( ', ', array_slice( $unique_links, 0, 5 ) ) );
+
 $result = array(
 'name'         => $category_name,
 'file'         => basename( $filename ),
 'full_path'    => $filename,
-'count'        => count( array_filter( $links ) ),
+'count'        => count( $unique_links ),
 'source_url'   => $source_url,
 'source_types' => $source_types,
 );
@@ -489,7 +579,7 @@ $links = json_decode( $result['stdout'], true );
 if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $links ) ) {
 return new WP_Error(
 'browser_automation_invalid_output',
-'Playwright çıktısı okunamadı. Stdout: ' . substr( trim( (string) $result['stdout'] ), 0, 500 )
+'Playwright çıktısı okunamadı. Stdout: ' . substr( trim( (string) $result['stdout'] ), 0, 500 ) . ' | Stderr: ' . substr( trim( (string) $result['stderr'] ), 0, 500 )
 );
 }
 
@@ -510,7 +600,7 @@ $normalized_links[] = $normalized;
 $normalized_links = array_values( array_unique( $normalized_links ) );
 
 if ( empty( $normalized_links ) ) {
-return new WP_Error( 'browser_automation_no_links', 'Gerçek tarayıcı otomasyonu çalıştı ancak ürün linki bulunamadı.' );
+return new WP_Error( 'browser_automation_no_links', 'Gerçek tarayıcı otomasyonu çalıştı ancak ürün linki bulunamadı. Debug: ' . substr( trim( (string) $result['stderr'] ), 0, 500 ) );
 }
 
 return $normalized_links;
@@ -541,18 +631,89 @@ try {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   });
 
-  const allLinks = new Set();
-  const collectRawProductLinks = async () => {
-    const anchorLinks = await page.locator('a').evaluateAll((anchors) =>
-      anchors.flatMap((anchor) => [anchor.href || '', anchor.getAttribute('href') || '']).filter(Boolean)
-    );
-    const html = await page.content();
-    const absoluteMatches = html.match(/https?:\/\/(?:www\.)?trendyol\.com\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
-    const relativeMatches = html.match(/\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90000);
 
-    return Array.from(new Set(anchorLinks.concat(absoluteMatches, relativeMatches)))
-      .map((link) => String(link).trim())
-      .filter((link) => link.includes('-p-'));
+  const allLinks = new Set();
+  const toAbsoluteUrl = (href) => {
+    if (typeof href !== 'string') {
+      return '';
+    }
+
+    const trimmedHref = href.trim();
+
+    if (!trimmedHref) {
+      return '';
+    }
+
+    if (trimmedHref.startsWith('//')) {
+      return `https:${trimmedHref}`;
+    }
+
+    if (trimmedHref.startsWith('/')) {
+      return `https://www.trendyol.com${trimmedHref}`;
+    }
+
+    return trimmedHref;
+  };
+  const collectProductLinks = async () => {
+    const links = await page.$$eval(
+      'a[data-testid="product-card"], a.product-card',
+      (elements) => elements.map((element) => element.getAttribute('href'))
+    );
+
+    return Array.from(
+      new Set(
+        links
+          .map((href) => (typeof href === 'string' ? href.trim() : ''))
+          .filter(Boolean)
+      )
+    )
+      .map((href) => {
+        if (href.startsWith('//')) {
+          return `https:${href}`;
+        }
+
+        if (href.startsWith('/')) {
+          return `https://www.trendyol.com${href}`;
+        }
+
+        return href;
+      })
+      .filter((href) => /^https?:\/\/(?:www\.)?trendyol\.com\//i.test(href));
+  };
+  const waitForNetworkIdle = async () => {
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
+    } catch (error) {
+      console.error('Network idle wait timeout, continuing...');
+    }
+  };
+  const scrollUntilNoNewLinks = async () => {
+    let previousCount = -1;
+    let stableRounds = 0;
+
+    for (let scrollIndex = 0; scrollIndex < 40; scrollIndex += 1) {
+      const currentLinks = await collectProductLinks();
+      currentLinks.forEach((link) => allLinks.add(toAbsoluteUrl(link)));
+
+      if (allLinks.size === previousCount) {
+        stableRounds += 1;
+      } else {
+        stableRounds = 0;
+        previousCount = allLinks.size;
+      }
+
+      if (stableRounds >= 2) {
+        break;
+      }
+
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await page.waitForTimeout(1500);
+      await waitForNetworkIdle();
+    }
   };
 
   for (let pageIndex = 1; pageIndex <= maxPages; pageIndex += 1) {
@@ -560,20 +721,28 @@ try {
     currentUrl.searchParams.set('pi', String(pageIndex));
 
     await page.goto(currentUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 90000 });
-    await page.waitForTimeout(2500);
+    await waitForNetworkIdle();
+    await page.waitForTimeout(1500);
+    await scrollUntilNoNewLinks();
 
-    const normalized = await collectRawProductLinks();
+    const normalized = await collectProductLinks();
 
     if (!normalized.length) {
       break;
     }
 
-    normalized.forEach((link) => allLinks.add(link));
+    normalized.forEach((link) => allLinks.add(toAbsoluteUrl(link)));
   }
 
-  console.log(JSON.stringify(Array.from(allLinks)));
+  const links = Array.from(allLinks).filter(Boolean);
+
+  console.error(`Found ${links.length} product links`);
+  console.error('Saved to: PHP data file');
+  console.error(`First 5 links: ${links.slice(0, 5).join(', ')}`);
+  console.log(JSON.stringify(links));
   await browser.close();
 })().catch((error) => {
+  console.error('PLAYWRIGHT_SCRAPE_FAILED');
   console.error(error && error.stack ? error.stack : error);
   process.exit(1);
 });
