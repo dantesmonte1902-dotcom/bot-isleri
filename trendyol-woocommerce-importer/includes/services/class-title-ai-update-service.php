@@ -79,7 +79,7 @@ $settings = array(
 'gemini_api_key'             => (string) Trendyol_Settings::get( 'gemini_api_key', '' ),
 'gemini_model'               => sanitize_text_field( (string) Trendyol_Settings::get( 'gemini_model', self::DEFAULT_MODEL ) ),
 'gemini_title_prompt'        => sanitize_textarea_field( (string) Trendyol_Settings::get( 'gemini_title_prompt', '' ) ),
-'gemini_title_max_length'    => intval( Trendyol_Settings::get( 'gemini_title_max_length', 110 ) ),
+'gemini_title_max_length'    => intval( Trendyol_Settings::get( 'gemini_title_max_length', 160 ) ),
 'openrouter_api_key'         => (string) Trendyol_Settings::get( 'openrouter_api_key', '' ),
 'openrouter_model'           => sanitize_text_field( (string) Trendyol_Settings::get( 'openrouter_model', '' ) ),
 'custom_ai_api_url'          => esc_url_raw( (string) Trendyol_Settings::get( 'custom_ai_api_url', '' ) ),
@@ -217,7 +217,7 @@ return $posts;
 }
 
 private function process_batch( $posts, $settings, $batch_number, $batch_total ) {
-$prompt           = $this->build_batch_prompt( $posts, $settings );
+$prompt           = $this->build_prompt( $posts, $settings );
 $retry_limit      = intval( $settings['ai_retry_limit'] );
 $providers        = $this->get_provider_order( $settings );
 $attempt          = 0;
@@ -327,6 +327,62 @@ $order[] = 'gemini';
 return $order;
 }
 
+private function build_prompt( $posts, $settings ) {
+if ( 1 === count( $posts ) ) {
+return $this->build_single_prompt( reset( $posts ), $settings );
+}
+
+return $this->build_batch_prompt( $posts, $settings );
+}
+
+private function build_single_prompt( $post, $settings ) {
+$max_length  = intval( $settings['gemini_title_max_length'] );
+$user_prompt = trim( (string) $settings['gemini_title_prompt'] );
+$language    = sanitize_text_field( (string) $settings['ai_output_language'] );
+$brand       = sanitize_text_field( (string) get_post_meta( $post->ID, 'trendyol_brand_name', true ) );
+$category    = sanitize_text_field( (string) get_post_meta( $post->ID, 'trendyol_product_category', true ) );
+$product_url = esc_url_raw( (string) get_post_meta( $post->ID, 'trendyol_product_url', true ) );
+$sku         = sanitize_text_field( (string) get_post_meta( $post->ID, '_sku', true ) );
+$content     = trim( wp_strip_all_tags( (string) $post->post_content ) );
+$lines       = array();
+
+$lines[] = sprintf( '%s kısa e-ticaret başlığı üret.', $language );
+$lines[] = 'Kurallar:';
+$lines[] = '- Maksimum ' . $max_length . ' karakter';
+$lines[] = '- SEO uyumlu';
+$lines[] = '- Sadece başlık yaz';
+$lines[] = '- Açıklama yazma';
+$lines[] = '- Tırnak işareti kullanma';
+
+if ( '' !== $user_prompt ) {
+$lines[] = '- Ek mağaza kuralı: ' . $user_prompt;
+}
+
+$lines[] = 'Ürün: ' . sanitize_text_field( (string) $post->post_title );
+
+if ( '' !== $brand ) {
+$lines[] = 'Marka: ' . $brand;
+}
+
+if ( '' !== $category ) {
+$lines[] = 'Kategori: ' . $category;
+}
+
+if ( '' !== $sku ) {
+$lines[] = 'SKU: ' . $sku;
+}
+
+if ( '' !== $content ) {
+$lines[] = 'Açıklama: ' . $this->truncate_text( preg_replace( '/\s+/', ' ', $content ), 220 );
+}
+
+if ( '' !== $product_url ) {
+$lines[] = 'Kaynak URL: ' . $product_url;
+}
+
+return implode( "\n", $lines );
+}
+
 private function build_batch_prompt( $posts, $settings ) {
 $max_length  = intval( $settings['gemini_title_max_length'] );
 $user_prompt = trim( (string) $settings['gemini_title_prompt'] );
@@ -357,8 +413,9 @@ $lines[] = sprintf( '%d. %s', $index + 1, $this->build_product_input_line( $post
 
 $lines[] = '';
 $lines[] = 'Beklenen çıktı formatı:';
-$lines[] = '1. Başlık';
-$lines[] = '2. Başlık';
+for ( $index = 1; $index <= min( 3, count( $posts ) ); $index++ ) {
+$lines[] = $index . '. Başlık';
+}
 
 return implode( "\n", $lines );
 }
@@ -421,6 +478,13 @@ $fallback = array();
 foreach ( (array) $lines as $line ) {
 $line = trim( wp_strip_all_tags( (string) $line ) );
 if ( '' === $line ) {
+continue;
+}
+
+if (
+preg_match( '/^(kurallar|beklenen çıktı formatı)\s*:?\s*$/iu', $line ) ||
+preg_match( '/^[-*]\s+/u', $line )
+) {
 continue;
 }
 
@@ -495,6 +559,12 @@ return array(
 private function build_failed_items_from_error( $posts, $error, $batch_number ) {
 $message = $error instanceof WP_Error ? $error->get_error_message() : __( 'AI batch işlemi başarısız oldu.', 'trendyol-woocommerce-importer' );
 $items   = array();
+$provider = '';
+
+if ( $error instanceof WP_Error ) {
+$error_data = (array) $error->get_error_data();
+$provider   = sanitize_key( (string) ( $error_data['provider'] ?? '' ) );
+}
 
 foreach ( array_values( $posts ) as $index => $post ) {
 $items[] = array(
@@ -502,6 +572,7 @@ $items[] = array(
 'title'       => $post->post_title,
 'message'     => $message,
 'edit_url'    => get_edit_post_link( $post->ID, 'raw' ),
+'provider'    => $provider,
 'batch'       => $batch_number,
 'batch_index' => $index + 1,
 );

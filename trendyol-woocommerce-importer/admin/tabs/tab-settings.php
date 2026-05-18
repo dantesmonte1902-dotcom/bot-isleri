@@ -290,7 +290,6 @@ $auto_sync_product_status   = $settings['auto_sync_product_status'] ?? 'both';
 			</div>
 
 			<div class="divider"></div>
-			<div class="divider"></div>
 
 			<div class="trendyol-section">
 				<h3><?php echo esc_html__( '⚙️ Diğer Ayarlar', 'trendyol-woocommerce-importer' ); ?></h3>
