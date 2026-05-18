@@ -88,6 +88,15 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     - Önceden kaydedilmiş HTML veya ürün link listesi PHP içinde işlenirse
     Bunun dışında "PHP tek başına canlı /sr sayfasını her zaman çeker" şeklinde kesin bir çözüm bu vaka için doğru değildir.
 
+19. Kesin çözüm önerisi burada kalıcı dursun:
+    Eğer bu iş için gerçekten stabil ve tekrar edilebilir bir çözüm isteniyorsa öneri şudur:
+    - En doğru çözüm: Trendyol'un izin verdiği resmi / yasal bir API kullanmak
+    - İkinci sağlam çözüm: HTML'i gerçek tarayıcı ile başka bir katmanda alıp PHP tarafına vermek
+    - PHP hosting içinde en pratik çözüm: önceden alınmış HTML veya doğrudan ürün link listesi ile import yapmak
+    Kısa özet:
+    "Canlı /sr sayfasını sadece PHP ile sürekli ve garantili çekmek" bu vaka için kesin çözüm değildir.
+    "Kalıcı ve anlaşılır çözüm" olarak bu dosyada tutulması gereken öneri, API / browser katmanı / hazır link listesi üçlüsüdür.
+
 Değişen dosyalar
 ----------------
 
