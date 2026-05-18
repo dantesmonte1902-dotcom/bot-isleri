@@ -30,6 +30,10 @@ $primary_tabs = array(
 		'icon'  => '📂',
 		'label' => __( 'Kategoriler', 'trendyol-woocommerce-importer' ),
 	),
+	'browser-automation' => array(
+		'icon'  => '🤖',
+		'label' => __( 'Tarayıcı Otomasyonu', 'trendyol-woocommerce-importer' ),
+	),
 	'history' => array(
 		'icon'  => '📜',
 		'label' => __( 'Geçmiş', 'trendyol-woocommerce-importer' ),
@@ -75,6 +79,7 @@ $tab_files = array(
 	'link-export'         => 'admin/tabs/tab-link-export.php',
 	'featured-image-export' => 'admin/tabs/tab-featured-image-export.php',
 	'categories'          => 'admin/tabs/tab-categories.php',
+	'browser-automation'  => 'admin/tabs/tab-browser-automation.php',
 	'history'             => 'admin/tabs/tab-history.php',
 	'settings'            => 'admin/tabs/tab-settings.php',
 	'kargo'               => 'admin/tabs/tab-kargo.php',

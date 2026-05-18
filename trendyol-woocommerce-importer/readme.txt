@@ -107,8 +107,29 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     Bu vaka için PHP hariç tarafta "browser automation + ayrı servis + düzenli veri aktarımı" modeli,
     canlı /sr sayfasını doğrudan WordPress-PHP ile çekmeye göre çok daha stabil ve sürdürülebilir çözümdür.
 
+21. Admin paneline yeni sekme eklendi: Tarayıcı Otomasyonu
+    admin.php?page=trendyol-importer&tab=browser-automation
+    Bu sekmede amaç doğrudan WordPress içinde Playwright çalıştırmak değil;
+    gerçek tarayıcı ile dışarıda alınan çıktıyı WordPress içine güvenli ve pratik şekilde kaydetmektir.
+    Sekme şunları sağlar:
+    - Hazır bir Playwright örnek scripti gösterir
+    - Kategori adı + kaynak URL + link listesi / JSON + HTML yapıştırma alanı sunar
+    - Yapıştırılan içerikten Trendyol ürün linklerini ayıklar
+    - Sonucu data klasörüne [kategori]-urunleri.txt olarak kaydeder
+    - Böylece Toplu Ekle sekmesinde hemen kullanılabilir hale getirir
+
+22. Yeni tabın pratik kullanım akışı
+    1) Tarayıcı otomasyonu sekmesindeki Playwright örneğini kendi Node/Playwright ortamında çalıştır
+    2) Çıkan JSON link listesini veya tarayıcıdan alınan HTML'yi sekmeye yapıştır
+    3) Kategori adını gir ve kaydet
+    4) Oluşan txt dosyasını Toplu Ekle sekmesinde kullan
+    Bu yapı, canlı /sr sayfasını WordPress-PHP ile çekmeye çalışmaktan daha kontrollü bir çözümdür.
+
 Değişen dosyalar
 ----------------
 
-- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/includes/services/class-title-ai-update-service.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/includes/services/class-browser-automation-service.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/admin/tabs/tab-browser-automation.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/admin/admin-page.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/trendyol-woocommerce-importer.php
 - /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/readme.txt
