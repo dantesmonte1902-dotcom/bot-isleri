@@ -41,6 +41,12 @@ class Trendyol_Settings {
 		'telegram_bot_token'        => '',
 		'telegram_chat_id'          => '',
 
+		// AI Başlık Güncelleme
+		'gemini_api_key'            => '',
+		'gemini_model'              => 'gemini-2.5-flash',
+		'gemini_title_prompt'       => '',
+		'gemini_title_max_length'   => 110,
+
 		// Diğer
 		'logs_retention_days'       => 30,
 		'enable_webhook'            => false,

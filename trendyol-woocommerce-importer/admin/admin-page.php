@@ -53,6 +53,10 @@ $tool_tabs = array(
 		'icon'  => '📝',
 		'label' => __( 'Başlık Güncelle', 'trendyol-woocommerce-importer' ),
 	),
+	'title-ai-update' => array(
+		'icon'  => '🤖',
+		'label' => __( 'Başlık Güncelle AI', 'trendyol-woocommerce-importer' ),
+	),
 	'batch-variant-stock' => array(
 		'icon'  => '📊',
 		'label' => __( 'Varyant Stok', 'trendyol-woocommerce-importer' ),
@@ -76,6 +80,7 @@ $tab_files = array(
 	'kargo'               => 'admin/tabs/tab-kargo.php',
 	'bulk-price-update'   => 'admin/tabs/tab-bulk-price-update.php',
 	'title-bulk-update'   => 'admin/tabs/tab-title-bulk-update.php',
+	'title-ai-update'     => 'admin/tabs/tab-title-ai-update.php',
 	'batch-variant-stock' => 'admin/tabs/tab-batch-variant-stock.php',
 	'scraper-diagnostic'  => 'admin/tabs/tab-scraper-diagnostic.php',
 );

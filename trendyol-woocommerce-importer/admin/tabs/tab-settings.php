@@ -182,6 +182,46 @@ $auto_sync_product_status   = $settings['auto_sync_product_status'] ?? 'both';
 			<div class="divider"></div>
 
 			<div class="trendyol-section">
+				<h3><?php echo esc_html__( '🤖 Gemini AI Başlık Ayarları', 'trendyol-woocommerce-importer' ); ?></h3>
+
+				<div class="form-group">
+					<label for="gemini_api_key">
+						<?php echo esc_html__( 'Gemini API Key', 'trendyol-woocommerce-importer' ); ?>
+					</label>
+					<input type="password" id="gemini_api_key" name="gemini_api_key" class="form-control" value="<?php echo esc_attr( $settings['gemini_api_key'] ?? '' ); ?>" autocomplete="off">
+					<small class="form-text">
+						<?php echo esc_html__( 'Başlık Güncelle AI sekmesi bu anahtar ile Gemini API çağrısı yapar.', 'trendyol-woocommerce-importer' ); ?>
+					</small>
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_model">
+						<?php echo esc_html__( 'Gemini Model', 'trendyol-woocommerce-importer' ); ?>
+					</label>
+					<input type="text" id="gemini_model" name="gemini_model" class="form-control" value="<?php echo esc_attr( $settings['gemini_model'] ?? 'gemini-2.5-flash' ); ?>" placeholder="gemini-2.5-flash">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_title_max_length">
+						<?php echo esc_html__( 'Maksimum başlık uzunluğu', 'trendyol-woocommerce-importer' ); ?>
+					</label>
+					<input type="number" id="gemini_title_max_length" name="gemini_title_max_length" class="form-control" min="40" max="200" value="<?php echo esc_attr( $settings['gemini_title_max_length'] ?? 110 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_title_prompt">
+						<?php echo esc_html__( 'Ek AI başlık talimatı', 'trendyol-woocommerce-importer' ); ?>
+					</label>
+					<textarea id="gemini_title_prompt" name="gemini_title_prompt" class="form-control" rows="6" placeholder="Markayı başta kullan, sade ve satış odaklı yaz."><?php echo esc_textarea( $settings['gemini_title_prompt'] ?? '' ); ?></textarea>
+					<small class="form-text">
+						<?php echo esc_html__( 'Boş bırakırsanız varsayılan Türkçe SEO uyumlu başlık kuralları kullanılır.', 'trendyol-woocommerce-importer' ); ?>
+					</small>
+				</div>
+			</div>
+
+			<div class="divider"></div>
+
+			<div class="trendyol-section">
 				<h3><?php echo esc_html__( '⚙️ Diğer Ayarlar', 'trendyol-woocommerce-importer' ); ?></h3>
 
 				<div class="form-group">

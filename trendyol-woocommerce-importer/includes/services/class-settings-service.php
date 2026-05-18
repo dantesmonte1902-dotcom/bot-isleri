@@ -39,6 +39,10 @@ class Trendyol_Settings_Service {
 		Trendyol_Settings::set( 'telegram_chat_id', sanitize_text_field( $post_data['telegram_chat_id'] ?? '' ) );
 		Trendyol_Settings::set( 'price_change_threshold', floatval( $post_data['price_change_threshold'] ?? 5 ) );
 		Trendyol_Settings::set( 'enable_change_detection', isset( $post_data['enable_change_detection'] ) ? 1 : 0 );
+		Trendyol_Settings::set( 'gemini_api_key', sanitize_text_field( $post_data['gemini_api_key'] ?? '' ) );
+		Trendyol_Settings::set( 'gemini_model', sanitize_text_field( $post_data['gemini_model'] ?? 'gemini-2.5-flash' ) );
+		Trendyol_Settings::set( 'gemini_title_prompt', sanitize_textarea_field( $post_data['gemini_title_prompt'] ?? '' ) );
+		Trendyol_Settings::set( 'gemini_title_max_length', intval( $post_data['gemini_title_max_length'] ?? 110 ) );
 
 		update_option(
 			'trendyol_blocked_brands',
