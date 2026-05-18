@@ -22,6 +22,10 @@ Yapılan düzeltmeler
 5. İlk sayfada hiç ürün linki bulunamazsa artık sessizce 0 kayıt dönmek yerine
    hata mesajı üretilecek. Böylece admin panelde sorun daha görünür olacak.
 
+6. Trendyol listing sayfasındaki application/ld+json verisi de parse ediliyor.
+   Özellikle ItemList > itemListElement > item.url ve @type=Product olan
+   objelerin url alanları ürün linki kaynağı olarak kullanılabiliyor.
+
 Değişen dosyalar
 ----------------
 

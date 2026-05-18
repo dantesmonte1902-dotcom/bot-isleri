@@ -231,6 +231,94 @@ class Trendyol_Category_Service {
 			}
 		}
 
+		foreach ( $this->extract_json_ld_product_links( $html ) as $link ) {
+			$links[ $link ] = true;
+		}
+
+		return array_keys( $links );
+	}
+
+	private function extract_json_ld_product_links( $html ) {
+		$links = array();
+		$html  = (string) $html;
+
+		if ( preg_match_all( '#<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>#is', $html, $matches ) ) {
+			foreach ( $matches[1] as $json_ld ) {
+				$json_ld = trim( html_entity_decode( (string) $json_ld, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+
+				if ( '' === $json_ld ) {
+					continue;
+				}
+
+				$decoded = json_decode( $json_ld, true );
+
+				if ( JSON_ERROR_NONE === json_last_error() ) {
+					foreach ( $this->collect_product_urls_from_schema( $decoded ) as $url ) {
+						$links[ $url ] = true;
+					}
+				}
+
+				if ( preg_match_all( '#"url"\s*:\s*"((?:https?:)?\\\\?/\\\\?/(?:www\\\\?\.)?trendyol\\\\?\.com/[^"]+?-p-\d+|https?://(?:www\.)?trendyol\.com/[^"]+?-p-\d+)"#i', $json_ld, $url_matches ) ) {
+					foreach ( $url_matches[1] as $url ) {
+						$normalized = $this->normalize_product_link( $url );
+
+						if ( $normalized ) {
+							$links[ $normalized ] = true;
+						}
+					}
+				}
+			}
+		}
+
+		return array_keys( $links );
+	}
+
+	private function collect_product_urls_from_schema( $data ) {
+		$links = array();
+
+		if ( ! is_array( $data ) ) {
+			return $links;
+		}
+
+		$type = isset( $data['@type'] ) ? $data['@type'] : '';
+		$url  = isset( $data['url'] ) ? $data['url'] : '';
+
+		if ( is_string( $type ) ) {
+			$type = array( $type );
+		}
+
+		if ( is_array( $type ) ) {
+			$is_supported = in_array( 'Product', $type, true ) || in_array( 'ItemList', $type, true );
+
+			if ( $is_supported && is_string( $url ) ) {
+				$normalized = $this->normalize_product_link( $url );
+
+				if ( $normalized ) {
+					$links[ $normalized ] = true;
+				}
+			}
+		}
+
+		if ( isset( $data['itemListElement'] ) && is_array( $data['itemListElement'] ) ) {
+			foreach ( $data['itemListElement'] as $item ) {
+				if ( is_array( $item ) && isset( $item['url'] ) && is_string( $item['url'] ) ) {
+					$normalized = $this->normalize_product_link( $item['url'] );
+
+					if ( $normalized ) {
+						$links[ $normalized ] = true;
+					}
+				}
+			}
+		}
+
+		foreach ( $data as $value ) {
+			if ( is_array( $value ) ) {
+				foreach ( $this->collect_product_urls_from_schema( $value ) as $url_value ) {
+					$links[ $url_value ] = true;
+				}
+			}
+		}
+
 		return array_keys( $links );
 	}
 
