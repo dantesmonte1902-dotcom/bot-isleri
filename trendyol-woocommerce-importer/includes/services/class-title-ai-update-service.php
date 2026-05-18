@@ -228,6 +228,8 @@ $providers_used   = array();
 $last_error       = null;
 
 while ( $attempt <= $retry_limit ) {
+$retryable_error = null;
+
 foreach ( $providers as $provider_key ) {
 $provider = Trendyol_AI_Provider_Factory::create( $provider_key, $settings );
 if ( ! $provider || ! $provider->is_configured() ) {
@@ -249,6 +251,7 @@ $total_wait += $budget_wait;
 
 $providers_used[] = $provider_key;
 $api_requests++;
+$this->request_timestamps[] = time();
 
 $response = $provider->generate_text(
 $prompt,
@@ -259,7 +262,6 @@ array(
 );
 
 if ( ! is_wp_error( $response ) ) {
-$this->request_timestamps[] = time();
 $items = $this->map_generated_titles_to_posts( $posts, (string) $response['text'], $settings, $provider_key, $batch_number );
 $this->log_batch_result( $batch_number, $batch_total, 'success', $provider_key, $attempt, $items );
 
@@ -278,29 +280,22 @@ return array(
 }
 
 $last_error = $response;
-$error_data = (array) $response->get_error_data();
 $this->log_batch_result( $batch_number, $batch_total, 'error', $provider_key, $attempt, array(), $response->get_error_message() );
 
-if ( 'config' === ( $error_data['type'] ?? '' ) ) {
-continue;
+if ( $this->is_retryable_error( $response ) && null === $retryable_error ) {
+$retryable_error = $response;
+}
 }
 
-if ( ! $this->is_retryable_error( $response ) ) {
-continue;
-}
-
-if ( $attempt < $retry_limit ) {
-$wait_seconds = $this->determine_retry_wait( $response, intval( $settings['ai_request_pause_seconds'] ) );
+if ( $retryable_error instanceof WP_Error && $attempt < $retry_limit ) {
+$wait_seconds = $this->determine_retry_wait( $retryable_error, intval( $settings['ai_request_pause_seconds'] ) );
 $total_wait  += $this->sleep_for_seconds( $wait_seconds );
 $retries_used++;
-break 2;
-}
+$attempt++;
+continue;
 }
 
-$attempt++;
-if ( $attempt > $retry_limit ) {
 break;
-}
 }
 
 return array(
