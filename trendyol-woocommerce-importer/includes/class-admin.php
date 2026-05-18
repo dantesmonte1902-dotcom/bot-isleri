@@ -10,16 +10,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Trendyol_Admin {
 
+	const MAX_OUTPUT_BUFFER_LEVELS            = 10;
+	const FEATURED_IMAGE_EXPORT_BATCH_SIZE    = 200;
+	const FEATURED_IMAGE_EXPORT_TIME_LIMIT    = 20;
+	const EXPORT_STREAM_CHUNK_SIZE            = 65536;
+
 	private $log_service;
 	private $price_service;
 	private $import_service;
 	private $bulk_import_service;
+	private $product_query_service;
 
 	public function __construct() {
 		$this->log_service         = new Trendyol_Log_Service();
 		$this->price_service       = new Trendyol_Price_Service();
 		$this->import_service      = new Trendyol_Import_Service();
 		$this->bulk_import_service = new Trendyol_Bulk_Import_Service();
+		$this->product_query_service = new Trendyol_Product_Query_Service();
 
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'wp_ajax_trendyol_test_telegram', array( $this, 'ajax_test_telegram' ) );
@@ -90,12 +97,15 @@ class Trendyol_Admin {
 				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
 			}
 
+			$product_sizes  = isset( $_POST['product_sizes'] ) ? json_decode( wp_unslash( $_POST['product_sizes'] ), true ) : array();
+			$product_images = isset( $_POST['product_images'] ) ? json_decode( wp_unslash( $_POST['product_images'] ), true ) : array();
+
 			$product_data = array(
 				'name'     => isset( $_POST['product_name'] ) ? sanitize_text_field( $_POST['product_name'] ) : '',
 				'price'    => isset( $_POST['product_price'] ) ? floatval( $_POST['product_price'] ) : 0,
-				'sizes'    => isset( $_POST['product_sizes'] ) ? json_decode( stripslashes( $_POST['product_sizes'] ), true ) : array(),
-				'images'   => isset( $_POST['product_images'] ) ? json_decode( stripslashes( $_POST['product_images'] ), true ) : array(),
-				'content'  => isset( $_POST['product_content'] ) ? wp_kses_post( $_POST['product_content'] ) : '',
+				'sizes'    => is_array( $product_sizes ) ? $product_sizes : array(),
+				'images'   => is_array( $product_images ) ? $product_images : array(),
+				'content'  => isset( $_POST['product_content'] ) ? wp_kses_post( wp_unslash( $_POST['product_content'] ) ) : '',
 				'url'      => isset( $_POST['product_url'] ) ? esc_url_raw( $_POST['product_url'] ) : '',
 				'category' => isset( $_POST['product_category'] ) ? sanitize_text_field( $_POST['product_category'] ) : '',
 				'brand'    => isset( $_POST['product_brand'] ) ? sanitize_text_field( $_POST['product_brand'] ) : '',
@@ -167,7 +177,346 @@ class Trendyol_Admin {
 			exit;
 		}
 
+		if (
+			isset( $_POST['trendyol_export_product_urls'] ) &&
+			isset( $_POST['_wpnonce'] ) &&
+			wp_verify_nonce( $_POST['_wpnonce'], 'trendyol_export_product_urls_nonce' )
+		) {
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
+			}
+
+			$status_filter = $this->normalize_export_status_filter(
+				isset( $_POST['export_status'] ) ? wp_unslash( $_POST['export_status'] ) : 'both'
+			);
+			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
+			$urls          = $this->product_query_service->get_trendyol_product_urls(
+				array(
+					'statuses' => $statuses,
+				)
+			);
+
+			if ( empty( $urls ) ) {
+				$_SESSION['trendyol_link_export_notice'] = 'Dışa aktarılacak Trendyol linki bulunamadı.';
+				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=link-export' ) );
+				exit;
+			}
+
+			$this->download_trendyol_product_urls_txt( $urls, $status_filter );
+		}
+
+		if (
+			isset( $_POST['trendyol_export_featured_images'] ) &&
+			isset( $_POST['_wpnonce'] ) &&
+			wp_verify_nonce( $_POST['_wpnonce'], 'trendyol_export_featured_images_nonce' )
+		) {
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				wp_die( esc_html__( 'Yetkisiz erişim', 'trendyol-woocommerce-importer' ) );
+			}
+
+			$status_filter = $this->normalize_export_status_filter(
+				isset( $_POST['featured_image_export_status'] ) ? wp_unslash( $_POST['featured_image_export_status'] ) : 'both'
+			);
+			$folder_mode   = $this->normalize_featured_image_export_folder_mode(
+				isset( $_POST['featured_image_export_folder_mode'] ) ? wp_unslash( $_POST['featured_image_export_folder_mode'] ) : 'flat'
+			);
+			$statuses      = $this->map_export_status_filter_to_statuses( $status_filter );
+			$product_count = $this->product_query_service->count_products_with_featured_images(
+				array(
+					'statuses' => $statuses,
+				)
+			);
+
+			if ( $product_count <= 0 ) {
+				$_SESSION['trendyol_featured_image_export_notice'] = 'İndirilecek öne çıkan görsel bulunamadı.';
+				wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+				exit;
+			}
+
+			$this->download_product_featured_images_zip( $statuses, $status_filter, $folder_mode );
+		}
+
 		include TRENDYOL_IMPORTER_PATH . 'admin/admin-page.php';
+	}
+
+	private function map_export_status_filter_to_statuses( $status_filter ) {
+		$status_filter = $this->normalize_export_status_filter( $status_filter );
+
+		switch ( $status_filter ) {
+			case 'publish':
+				return array( 'publish' );
+			case 'draft':
+				return array( 'draft' );
+			case 'both':
+			default:
+				return array( 'draft', 'publish' );
+		}
+	}
+
+	private function normalize_export_status_filter( $status_filter ) {
+		$allowed_status_filters = array( 'both', 'draft', 'publish' );
+		$status_filter          = sanitize_key( (string) $status_filter );
+
+		return in_array( $status_filter, $allowed_status_filters, true ) ? $status_filter : 'both';
+	}
+
+	private function normalize_featured_image_export_folder_mode( $folder_mode ) {
+		$allowed_folder_modes = array( 'flat', 'category' );
+		$folder_mode          = sanitize_key( (string) $folder_mode );
+
+		return in_array( $folder_mode, $allowed_folder_modes, true ) ? $folder_mode : 'flat';
+	}
+
+	private function download_trendyol_product_urls_txt( $urls, $status_filter ) {
+		$status_filter = $this->normalize_export_status_filter( $status_filter );
+		$urls          = array_values(
+			array_filter(
+				array_unique(
+					array_map(
+						'trim',
+						array_map( 'strval', (array) $urls )
+					)
+				),
+				static function ( $url ) {
+					return '' !== $url;
+				}
+			)
+		);
+
+		$filename = sprintf(
+			'trendyol-urun-linkleri-%s-%s.txt',
+			$status_filter,
+			gmdate( 'Y-m-d-His' )
+		);
+		$content  = implode( "\n", $urls );
+
+		$max_buffer_levels = self::MAX_OUTPUT_BUFFER_LEVELS;
+
+		while ( ob_get_level() > 0 && $max_buffer_levels-- > 0 ) {
+			ob_end_clean();
+		}
+
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . strlen( $content ) );
+
+		echo $content;
+		exit;
+	}
+
+	private function download_product_featured_images_zip( $statuses, $status_filter, $folder_mode = 'flat' ) {
+		if ( ! class_exists( 'ZipArchive' ) ) {
+			$_SESSION['trendyol_featured_image_export_notice'] = 'Sunucuda ZIP desteği olmadığı için görseller indirilemedi.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$status_filter          = $this->normalize_export_status_filter( $status_filter );
+		$folder_mode            = $this->normalize_featured_image_export_folder_mode( $folder_mode );
+		$zip_path               = wp_tempnam( 'trendyol-one-cikan-gorseller-' . $status_filter . '.zip' );
+
+		if ( empty( $zip_path ) ) {
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası hazırlanamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$zip = new ZipArchive();
+
+		if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
+			@unlink( $zip_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası oluşturulamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$this->prepare_long_running_export();
+
+		$added_files = 0;
+		$offset      = 0;
+		$batch_size  = self::FEATURED_IMAGE_EXPORT_BATCH_SIZE;
+
+		do {
+			$this->refresh_long_running_export_time_limit();
+
+			$products = $this->product_query_service->get_products_with_featured_images(
+				array(
+					'statuses' => $statuses,
+					'limit'    => $batch_size,
+					'offset'   => $offset,
+				)
+			);
+
+			foreach ( $products as $product ) {
+				$product_id   = isset( $product['product_id'] ) ? intval( $product['product_id'] ) : 0;
+				$thumbnail_id = isset( $product['thumbnail_id'] ) ? intval( $product['thumbnail_id'] ) : 0;
+				$product_name = isset( $product['product_name'] ) ? $product['product_name'] : '';
+				$file_path    = $this->get_attachment_export_file_path( $thumbnail_id );
+
+				if ( $product_id <= 0 || $thumbnail_id <= 0 || empty( $file_path ) || ! file_exists( $file_path ) ) {
+					continue;
+				}
+
+				$filename = $this->build_featured_image_zip_entry_name( $product_id, $product_name, $file_path, $folder_mode );
+
+				if ( $zip->addFile( $file_path, $filename ) ) {
+					$added_files++;
+				}
+			}
+
+			$offset += count( $products );
+		} while ( count( $products ) === $batch_size );
+
+		$zip->close();
+
+		if ( $added_files <= 0 || ! file_exists( $zip_path ) ) {
+			@unlink( $zip_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'İndirilebilir öne çıkan görsel bulunamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$filename = sprintf(
+			'one-cikan-gorseller-%s-%s.zip',
+			$status_filter,
+			gmdate( 'Y-m-d-His' )
+		);
+
+		$this->stream_export_file_download( $zip_path, $filename, 'application/zip' );
+	}
+
+	private function build_featured_image_zip_entry_name( $product_id, $product_name, $file_path, $folder_mode = 'flat' ) {
+		$product_id = intval( $product_id );
+		$basename   = sanitize_title( wp_strip_all_tags( (string) $product_name ) );
+		$basename   = trim( $basename, '.-_' );
+		$extension  = sanitize_key( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+		$folder_mode = $this->normalize_featured_image_export_folder_mode( $folder_mode );
+
+		if ( '' === $basename ) {
+			$basename = 'urun';
+		}
+
+		if ( '' === $extension ) {
+			$extension = 'jpg';
+		}
+
+		$filename = sprintf( '%d-%s.%s', $product_id, $basename, $extension );
+
+		if ( 'category' !== $folder_mode ) {
+			return $filename;
+		}
+
+		return $this->get_featured_image_export_category_folder( $product_id ) . '/' . $filename;
+	}
+
+	private function get_featured_image_export_category_folder( $product_id ) {
+		$product_id = intval( $product_id );
+		$categories = array();
+
+		if ( $product_id > 0 ) {
+			$categories = wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'names' ) );
+		}
+
+		if ( is_wp_error( $categories ) || empty( $categories ) ) {
+			$categories = array( get_post_meta( $product_id, 'trendyol_product_category', true ) );
+		}
+
+		foreach ( (array) $categories as $category_name ) {
+			$folder_name = sanitize_file_name( wp_strip_all_tags( (string) $category_name ) );
+			$folder_name = trim( $folder_name, '.-_' );
+
+			if ( '' !== $folder_name ) {
+				return $folder_name;
+			}
+		}
+
+		return 'kategorisiz';
+	}
+
+	private function get_attachment_export_file_path( $attachment_id ) {
+		$attachment_id = intval( $attachment_id );
+
+		if ( $attachment_id <= 0 ) {
+			return '';
+		}
+
+		if ( function_exists( 'wp_get_original_image_path' ) ) {
+			$original_path = wp_get_original_image_path( $attachment_id );
+
+			if ( ! empty( $original_path ) && file_exists( $original_path ) ) {
+				return $original_path;
+			}
+		}
+
+		$file_path = get_attached_file( $attachment_id );
+
+		if ( ! empty( $file_path ) && file_exists( $file_path ) ) {
+			return $file_path;
+		}
+
+		return '';
+	}
+
+	private function prepare_long_running_export() {
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true );
+		}
+
+		$this->refresh_long_running_export_time_limit();
+	}
+
+	private function refresh_long_running_export_time_limit() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( self::FEATURED_IMAGE_EXPORT_TIME_LIMIT );
+		}
+	}
+
+	private function stream_export_file_download( $file_path, $filename, $content_type ) {
+		$file_size = @filesize( $file_path );
+
+		if ( false === $file_size || ! is_readable( $file_path ) ) {
+			@unlink( $file_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası okunamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		$max_buffer_levels = self::MAX_OUTPUT_BUFFER_LEVELS;
+
+		while ( ob_get_level() > 0 && $max_buffer_levels-- > 0 ) {
+			ob_end_clean();
+		}
+
+		nocache_headers();
+		header( 'Content-Type: ' . $content_type );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . $file_size );
+		header( 'Content-Transfer-Encoding: binary' );
+
+		$handle = fopen( $file_path, 'rb' );
+
+		if ( false === $handle ) {
+			@unlink( $file_path );
+			$_SESSION['trendyol_featured_image_export_notice'] = 'ZIP dosyası açılamadı.';
+			wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=featured-image-export' ) );
+			exit;
+		}
+
+		while ( ! feof( $handle ) ) {
+			$chunk = fread( $handle, self::EXPORT_STREAM_CHUNK_SIZE );
+
+			if ( false === $chunk ) {
+				break;
+			}
+
+			echo $chunk;
+			flush();
+		}
+
+		fclose( $handle );
+		@unlink( $file_path );
+		exit;
 	}
 
 	public function ajax_variant_stock_sync() {
@@ -274,9 +623,10 @@ class Trendyol_Admin {
 			return;
 		}
 
-		$profit       = (float) $profit_data['net_profit_eur'];
-		$kargo_eur    = (float) $profit_data['kargo_eur'];
-		$current_euro = (float) $profit_data['current_euro_kur'];
+		$profit            = (float) $profit_data['net_profit_eur'];
+		$kargo_eur         = (float) $profit_data['kargo_eur'];
+		$current_sale_rate = (float) $profit_data['sale_currency_rate'];
+		$sale_rate_label   = ! empty( $profit_data['sale_currency_label'] ) ? (string) $profit_data['sale_currency_label'] : 'RSD/EUR';
 
 		$state_class = 'trendyol-profit-box--warn';
 		if ( $profit > 0 ) {
@@ -289,7 +639,7 @@ class Trendyol_Admin {
 		echo '<div class="trendyol-profit-title">Net Kâr</div>';
 		echo '<div class="trendyol-profit-value">€ ' . esc_html( number_format( $profit, 2, '.', '' ) ) . '</div>';
 		echo '<div class="trendyol-profit-meta">Kargo: €' . esc_html( number_format( $kargo_eur, 2, '.', '' ) ) . '</div>';
-		echo '<div class="trendyol-profit-meta">Kur: ' . esc_html( number_format( $current_euro, 4, '.', '' ) ) . '</div>';
+		echo '<div class="trendyol-profit-meta">Kur: ' . esc_html( $sale_rate_label ) . ' ' . esc_html( number_format( $current_sale_rate, 4, '.', '' ) ) . '</div>';
 		echo '</div>';
 		echo '</div>';
 	}
@@ -299,9 +649,9 @@ class Trendyol_Admin {
 		$alis_tl           = get_post_meta( $post_id, 'trendyol_original_price_tl', true );
 		$alis_rsd_fallback = get_post_meta( $post_id, 'trendyol_original_price_rsd', true );
 
-		$satis_rsd = $this->price_service->get_product_sale_price_rsd( $post_id );
+		$satis_fiyat = $this->price_service->get_product_sale_price_rsd( $post_id );
 
-		if ( '' === $satis_rsd || null === $satis_rsd || ! is_numeric( $satis_rsd ) ) {
+		if ( '' === $satis_fiyat || null === $satis_fiyat || ! is_numeric( $satis_fiyat ) ) {
 			return array(
 				'ok'     => false,
 				'reason' => 'Satış fiyatı yok',
@@ -310,6 +660,13 @@ class Trendyol_Admin {
 
 		$current_euro_kur = get_trendyol_euro_kuru();
 		$current_rsd_kur  = get_trendyol_rsd_kuru();
+		$sale_rate_info   = method_exists( $this->price_service, 'get_active_currency_rate_info' )
+			? $this->price_service->get_active_currency_rate_info()
+			: array(
+				'currency' => 'rsd',
+				'rate'     => $current_rsd_kur,
+				'label'    => 'RSD/EUR',
+			);
 
 		$purchase_eur = null;
 
@@ -346,7 +703,17 @@ class Trendyol_Admin {
 			}
 		}
 
-		$sales_eur      = (float) $satis_rsd / (float) $current_rsd_kur;
+		$sales_eur = method_exists( $this->price_service, 'convert_sale_price_to_eur' )
+			? $this->price_service->convert_sale_price_to_eur( (float) $satis_fiyat )
+			: ( (float) $satis_fiyat / (float) $current_rsd_kur );
+
+		if ( null === $sales_eur ) {
+			return array(
+				'ok'     => false,
+				'reason' => 'Kur bilgisi yok',
+			);
+		}
+
 		$total_cost_eur = (float) $purchase_eur + (float) $kargo_eur;
 		$net_profit_eur = (float) $sales_eur - (float) $total_cost_eur;
 
@@ -359,6 +726,9 @@ class Trendyol_Admin {
 			'net_profit_eur'   => $net_profit_eur,
 			'current_euro_kur' => $current_euro_kur,
 			'current_rsd_kur'  => $current_rsd_kur,
+			'sale_currency'    => $sale_rate_info['currency'],
+			'sale_currency_rate'  => (float) $sale_rate_info['rate'],
+			'sale_currency_label' => $sale_rate_info['label'],
 		);
 	}
 

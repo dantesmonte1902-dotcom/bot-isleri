@@ -70,14 +70,10 @@ class Trendyol_Product_Importer {
 		$euro_kur = get_trendyol_euro_kuru();
 		$euro_kur = ( is_numeric( $euro_kur ) && (float) $euro_kur > 0 ) ? (float) $euro_kur : 32.0;
 
-		$rsd_kur = get_trendyol_rsd_kuru();
-		$rsd_kur = ( is_numeric( $rsd_kur ) && (float) $rsd_kur > 0 ) ? (float) $rsd_kur : 117.38;
-
-		$new_price = trendyol_final_fiyat_rsd(
+		$new_price = trendyol_active_currency_price(
 			$tl_fiyat,
 			$kategori_ad_norm,
 			$euro_kur,
-			$rsd_kur,
 			$this->default_kargo,
 			$this->default_marj
 		);
@@ -86,6 +82,8 @@ class Trendyol_Product_Importer {
 			return new WP_Error( 'price_calc_failed', __( 'Satış fiyatı hesaplanamadı.', 'trendyol-woocommerce-importer' ) );
 		}
 
+		$rsd_kur            = get_trendyol_rsd_kuru();
+		$rsd_kur            = ( is_numeric( $rsd_kur ) && (float) $rsd_kur > 0 ) ? (float) $rsd_kur : 117.38;
 		$trendyol_alish_rsd = 0;
 		if ( $tl_fiyat > 0 && $euro_kur > 0 && $rsd_kur > 0 ) {
 			$euro               = (float) $tl_fiyat / (float) $euro_kur;
@@ -161,27 +159,88 @@ class Trendyol_Product_Importer {
 		update_post_meta( $product_id, '_stock_status', 'instock' );
 		update_post_meta( $product_id, '_manage_stock', 'no' );
 
+		if ( function_exists( 'wc_get_product' ) ) {
+			$wc_product = wc_get_product( $product_id );
+			if ( $wc_product ) {
+				$wc_product->set_stock_status( 'instock' );
+				$wc_product->save();
+			}
+		}
+
+		if ( function_exists( 'wc_delete_product_transients' ) ) {
+			wc_delete_product_transients( $product_id );
+		}
+
 		return true;
 	}
 
 	private function create_variable_product( $product_id, $product_name, $price, $sizes ) {
-		if ( ! taxonomy_exists( 'pa_beden' ) ) {
-			register_taxonomy(
-				'pa_beden',
-				'product',
-				array(
-					'hierarchical' => false,
-					'label'        => 'Beden',
-					'show_ui'      => true,
-					'query_var'    => true,
-					'rewrite'      => false,
+		if ( ! function_exists( 'wc_attribute_taxonomy_name' ) ) {
+			return new WP_Error( 'woocommerce_missing_helpers', __( 'WooCommerce attribute helper bulunamadı.', 'trendyol-woocommerce-importer' ) );
+		}
+
+		$attribute_name = 'Beden';
+		$taxonomy       = wc_attribute_taxonomy_name( 'beden' );
+
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			global $wpdb;
+
+			$attribute_exists = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT attribute_id FROM {$wpdb->prefix}woocommerce_attribute_taxonomies WHERE attribute_name = %s LIMIT 1",
+					'beden'
 				)
 			);
+
+			if ( ! $attribute_exists && function_exists( 'wc_create_attribute' ) ) {
+				$attribute_id = wc_create_attribute(
+					array(
+						'name'         => $attribute_name,
+						'slug'         => 'beden',
+						'type'         => 'select',
+						'order_by'     => 'menu_order',
+						'has_archives' => false,
+					)
+				);
+
+				if ( is_wp_error( $attribute_id ) ) {
+					return $attribute_id;
+				}
+
+				delete_transient( 'wc_attribute_taxonomies' );
+
+				if ( class_exists( 'WC_Cache_Helper' ) && method_exists( 'WC_Cache_Helper', 'invalidate_cache_group' ) ) {
+					WC_Cache_Helper::invalidate_cache_group( 'woocommerce-attributes' );
+				}
+
+				register_taxonomy(
+					$taxonomy,
+					array( 'product' ),
+					array(
+						'hierarchical' => false,
+						'label'        => $attribute_name,
+						'query_var'    => true,
+						'rewrite'      => false,
+					)
+				);
+			} else {
+				register_taxonomy(
+					$taxonomy,
+					array( 'product' ),
+					array(
+						'hierarchical' => false,
+						'label'        => $attribute_name,
+						'query_var'    => true,
+						'rewrite'      => false,
+					)
+				);
+			}
 		}
 
 		wp_set_object_terms( $product_id, 'variable', 'product_type' );
 
-		$size_slugs = array();
+		$size_slugs  = array();
+		$clean_sizes = array();
 
 		foreach ( $sizes as $size ) {
 			$size = trim( (string) $size );
@@ -189,64 +248,99 @@ class Trendyol_Product_Importer {
 				continue;
 			}
 
-			$slug         = sanitize_title( $size );
-			$size_slugs[] = $slug;
+			$slug          = sanitize_title( $size );
+			$clean_sizes[] = $size;
+			$size_slugs[]  = $slug;
 
-			if ( ! term_exists( $slug, 'pa_beden' ) ) {
-				$term = wp_insert_term( $size, 'pa_beden', array( 'slug' => $slug ) );
+			$term_check = term_exists( $slug, $taxonomy );
+			if ( ! $term_check ) {
+				$term = wp_insert_term(
+					$size,
+					$taxonomy,
+					array(
+						'slug' => $slug,
+					)
+				);
+
 				if ( is_wp_error( $term ) && 'term_exists' !== $term->get_error_code() ) {
 					return $term;
 				}
 			}
 		}
 
+		$size_slugs = array_values( array_unique( array_filter( $size_slugs ) ) );
+
 		if ( empty( $size_slugs ) ) {
 			return new WP_Error( 'no_valid_sizes', __( 'Geçerli varyasyon bedeni bulunamadı.', 'trendyol-woocommerce-importer' ) );
 		}
 
-		$attribute = array(
-			'name'         => 'pa_beden',
-			'value'        => implode( ' | ', $size_slugs ),
-			'is_visible'   => 1,
-			'is_variation' => 1,
-			'is_taxonomy'  => 1,
+		wp_set_object_terms( $product_id, $size_slugs, $taxonomy, false );
+
+		$product_attributes = array(
+			$taxonomy => array(
+				'name'         => $taxonomy,
+				'value'        => '',
+				'position'     => 0,
+				'is_visible'   => 1,
+				'is_variation' => 1,
+				'is_taxonomy'  => 1,
+			),
 		);
 
-		update_post_meta( $product_id, '_product_attributes', array( 'pa_beden' => $attribute ) );
-		wp_set_object_terms( $product_id, $size_slugs, 'pa_beden', false );
+		update_post_meta( $product_id, '_product_attributes', $product_attributes );
 
-		foreach ( $sizes as $size ) {
-			$size = trim( (string) $size );
-			if ( '' === $size ) {
-				continue;
-			}
-
+		foreach ( $clean_sizes as $index => $size ) {
 			$slug = sanitize_title( $size );
 
-			$variation_post = array(
-				'post_title'  => $product_name . ' - ' . $size,
-				'post_name'   => 'product-' . $product_id . '-variation-' . $slug,
-				'post_status' => 'publish',
-				'post_parent' => $product_id,
-				'post_type'   => 'product_variation',
-				'menu_order'  => 0,
+			$variation_id = wp_insert_post(
+				array(
+					'post_title'  => $product_name . ' - ' . $size,
+					'post_name'   => 'product-' . $product_id . '-variation-' . $slug,
+					'post_status' => 'publish',
+					'post_parent' => $product_id,
+					'post_type'   => 'product_variation',
+					'menu_order'  => $index,
+				),
+				true
 			);
-
-			$variation_id = wp_insert_post( $variation_post, true );
 
 			if ( is_wp_error( $variation_id ) ) {
 				return $variation_id;
 			}
 
-			update_post_meta( $variation_id, 'attribute_pa_beden', $slug );
+			update_post_meta( $variation_id, 'attribute_' . $taxonomy, $slug );
 			update_post_meta( $variation_id, '_regular_price', $price );
 			update_post_meta( $variation_id, '_price', $price );
 			update_post_meta( $variation_id, '_stock_status', 'instock' );
 			update_post_meta( $variation_id, '_manage_stock', 'no' );
+			update_post_meta( $variation_id, '_stock', '' );
+
+			if ( function_exists( 'wc_get_product' ) ) {
+				$variation_product = wc_get_product( $variation_id );
+				if ( $variation_product ) {
+					$variation_product->set_stock_status( 'instock' );
+					$variation_product->save();
+				}
+			}
 		}
 
 		update_post_meta( $product_id, '_regular_price', $price );
 		update_post_meta( $product_id, '_price', $price );
+		update_post_meta( $product_id, '_stock_status', 'instock' );
+		update_post_meta( $product_id, '_manage_stock', 'no' );
+		update_post_meta( $product_id, '_stock', '' );
+
+		if ( function_exists( 'wc_get_product' ) ) {
+			$wc_product = wc_get_product( $product_id );
+			if ( $wc_product ) {
+				$wc_product->set_stock_status( 'instock' );
+				$wc_product->save();
+			}
+		}
+
+		if ( function_exists( 'wc_delete_product_transients' ) ) {
+			wc_delete_product_transients( $product_id );
+		}
 
 		return true;
 	}

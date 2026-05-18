@@ -24,13 +24,11 @@ class Trendyol_Price_Service {
 		}
 
 		$euro_kur = function_exists( 'get_trendyol_euro_kuru' ) ? get_trendyol_euro_kuru() : 0;
-		$rsd_kur  = function_exists( 'get_trendyol_rsd_kuru' ) ? get_trendyol_rsd_kuru() : 0;
 
-		return trendyol_final_fiyat_rsd(
+		return trendyol_active_currency_price(
 			$tl_price,
 			$category,
 			$euro_kur,
-			$rsd_kur,
 			$this->default_kargo,
 			$this->default_marj
 		);
@@ -168,9 +166,9 @@ class Trendyol_Price_Service {
 		$kategori          = get_post_meta( $post_id, 'trendyol_product_category', true );
 		$alis_tl           = get_post_meta( $post_id, 'trendyol_original_price_tl', true );
 		$alis_rsd_fallback = get_post_meta( $post_id, 'trendyol_original_price_rsd', true );
-		$satis_rsd         = $this->get_product_sale_price_rsd( $post_id );
+		$satis_fiyat       = $this->get_product_sale_price_rsd( $post_id );
 
-		if ( '' === $satis_rsd || null === $satis_rsd || ! is_numeric( $satis_rsd ) ) {
+		if ( '' === $satis_fiyat || null === $satis_fiyat || ! is_numeric( $satis_fiyat ) ) {
 			return null;
 		}
 
@@ -204,10 +202,60 @@ class Trendyol_Price_Service {
 			}
 		}
 
-		$sales_eur      = (float) $satis_rsd / $current_rsd_kur;
+		$sales_eur      = $this->convert_sale_price_to_eur( (float) $satis_fiyat );
 		$total_cost_eur = (float) $purchase_eur + (float) $kargo_eur;
 
+		if ( null === $sales_eur ) {
+			return null;
+		}
+
 		return (float) $sales_eur - (float) $total_cost_eur;
+	}
+
+	public function convert_sale_price_to_eur( $sale_price ) {
+		$sale_price = (float) $sale_price;
+
+		if ( $sale_price <= 0 ) {
+			return null;
+		}
+
+		$rate_info = $this->get_active_currency_rate_info();
+
+		if ( 'eur' === $rate_info['currency'] ) {
+			return $sale_price;
+		}
+
+		if ( $rate_info['rate'] <= 0 ) {
+			return null;
+		}
+
+		return $sale_price / (float) $rate_info['rate'];
+	}
+
+	public function get_active_currency_rate_info() {
+		$currency = function_exists( 'trendyol_get_active_currency' ) ? trendyol_get_active_currency() : 'rsd';
+
+		switch ( $currency ) {
+			case 'bam':
+				return array(
+					'currency' => 'bam',
+					'rate'     => function_exists( 'get_trendyol_bam_kuru' ) ? (float) get_trendyol_bam_kuru() : 0,
+					'label'    => 'KM/EUR',
+				);
+			case 'eur':
+				return array(
+					'currency' => 'eur',
+					'rate'     => 1.0,
+					'label'    => 'EUR/EUR',
+				);
+			case 'rsd':
+			default:
+				return array(
+					'currency' => 'rsd',
+					'rate'     => function_exists( 'get_trendyol_rsd_kuru' ) ? (float) get_trendyol_rsd_kuru() : 0,
+					'label'    => 'RSD/EUR',
+				);
+		}
 	}
 
 	public function get_product_sale_price_rsd( $post_id ) {

@@ -182,6 +182,116 @@ $auto_sync_product_status   = $settings['auto_sync_product_status'] ?? 'both';
 			<div class="divider"></div>
 
 			<div class="trendyol-section">
+				<h3><?php echo esc_html__( '🤖 AI Başlık Ayarları', 'trendyol-woocommerce-importer' ); ?></h3>
+
+				<div class="form-group">
+					<label for="ai_provider"><?php echo esc_html__( 'Birincil AI sağlayıcısı', 'trendyol-woocommerce-importer' ); ?></label>
+					<select id="ai_provider" name="ai_provider" class="form-control">
+						<option value="gemini" <?php selected( $settings['ai_provider'] ?? 'gemini', 'gemini' ); ?>>Gemini</option>
+						<option value="openrouter" <?php selected( $settings['ai_provider'] ?? '', 'openrouter' ); ?>>OpenRouter</option>
+						<option value="custom" <?php selected( $settings['ai_provider'] ?? '', 'custom' ); ?>>Custom AI</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label for="ai_fallback_provider"><?php echo esc_html__( 'Fallback sağlayıcısı', 'trendyol-woocommerce-importer' ); ?></label>
+					<select id="ai_fallback_provider" name="ai_fallback_provider" class="form-control">
+						<option value="none" <?php selected( $settings['ai_fallback_provider'] ?? 'none', 'none' ); ?>><?php echo esc_html__( 'Kapalı', 'trendyol-woocommerce-importer' ); ?></option>
+						<option value="gemini" <?php selected( $settings['ai_fallback_provider'] ?? '', 'gemini' ); ?>>Gemini</option>
+						<option value="openrouter" <?php selected( $settings['ai_fallback_provider'] ?? '', 'openrouter' ); ?>>OpenRouter</option>
+						<option value="custom" <?php selected( $settings['ai_fallback_provider'] ?? '', 'custom' ); ?>>Custom AI</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>
+						<input type="checkbox" name="ai_batch_enabled" value="1" <?php checked( $settings['ai_batch_enabled'] ?? 0, 1 ); ?>>
+						<?php echo esc_html__( 'Toplu AI İşleme seçeneğini aç', 'trendyol-woocommerce-importer' ); ?>
+					</label>
+				</div>
+
+				<div class="form-group">
+					<label for="ai_default_processing_mode"><?php echo esc_html__( 'Varsayılan işlem modu', 'trendyol-woocommerce-importer' ); ?></label>
+					<select id="ai_default_processing_mode" name="ai_default_processing_mode" class="form-control">
+						<option value="single" <?php selected( $settings['ai_default_processing_mode'] ?? 'single', 'single' ); ?>><?php echo esc_html__( 'Tekli', 'trendyol-woocommerce-importer' ); ?></option>
+						<option value="batch" <?php selected( $settings['ai_default_processing_mode'] ?? '', 'batch' ); ?>><?php echo esc_html__( 'Toplu', 'trendyol-woocommerce-importer' ); ?></option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label for="ai_batch_size"><?php echo esc_html__( 'Varsayılan batch size', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="number" id="ai_batch_size" name="ai_batch_size" class="form-control" min="2" max="20" value="<?php echo esc_attr( $settings['ai_batch_size'] ?? 10 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="ai_retry_limit"><?php echo esc_html__( 'Batch retry sayısı', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="number" id="ai_retry_limit" name="ai_retry_limit" class="form-control" min="0" max="5" value="<?php echo esc_attr( $settings['ai_retry_limit'] ?? 2 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="ai_request_pause_seconds"><?php echo esc_html__( 'Batch arası bekleme (saniye)', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="number" id="ai_request_pause_seconds" name="ai_request_pause_seconds" class="form-control" min="0" max="120" value="<?php echo esc_attr( $settings['ai_request_pause_seconds'] ?? 12 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="ai_requests_per_minute"><?php echo esc_html__( 'Dakikadaki istek limiti', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="number" id="ai_requests_per_minute" name="ai_requests_per_minute" class="form-control" min="1" max="60" value="<?php echo esc_attr( $settings['ai_requests_per_minute'] ?? 5 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="ai_output_language"><?php echo esc_html__( 'Çıktı dili', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="text" id="ai_output_language" name="ai_output_language" class="form-control" value="<?php echo esc_attr( $settings['ai_output_language'] ?? 'Boşnakça' ); ?>" placeholder="Boşnakça">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_api_key"><?php echo esc_html__( 'Gemini API Key', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="password" id="gemini_api_key" name="gemini_api_key" class="form-control" value="<?php echo esc_attr( $settings['gemini_api_key'] ?? '' ); ?>" autocomplete="off">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_model"><?php echo esc_html__( 'Gemini Model', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="text" id="gemini_model" name="gemini_model" class="form-control" value="<?php echo esc_attr( $settings['gemini_model'] ?? 'gemini-2.5-flash' ); ?>" placeholder="gemini-2.5-flash">
+				</div>
+
+				<div class="form-group">
+					<label for="openrouter_api_key"><?php echo esc_html__( 'OpenRouter API Key', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="password" id="openrouter_api_key" name="openrouter_api_key" class="form-control" value="<?php echo esc_attr( $settings['openrouter_api_key'] ?? '' ); ?>" autocomplete="off">
+				</div>
+
+				<div class="form-group">
+					<label for="openrouter_model"><?php echo esc_html__( 'OpenRouter Model', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="text" id="openrouter_model" name="openrouter_model" class="form-control" value="<?php echo esc_attr( $settings['openrouter_model'] ?? '' ); ?>" placeholder="openai/gpt-4.1-mini">
+				</div>
+
+				<div class="form-group">
+					<label for="custom_ai_api_url"><?php echo esc_html__( 'Custom AI API URL', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="url" id="custom_ai_api_url" name="custom_ai_api_url" class="form-control" value="<?php echo esc_attr( $settings['custom_ai_api_url'] ?? '' ); ?>" placeholder="https://example.com/v1/chat/completions">
+				</div>
+
+				<div class="form-group">
+					<label for="custom_ai_api_key"><?php echo esc_html__( 'Custom AI API Key', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="password" id="custom_ai_api_key" name="custom_ai_api_key" class="form-control" value="<?php echo esc_attr( $settings['custom_ai_api_key'] ?? '' ); ?>" autocomplete="off">
+				</div>
+
+				<div class="form-group">
+					<label for="custom_ai_model"><?php echo esc_html__( 'Custom AI Model', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="text" id="custom_ai_model" name="custom_ai_model" class="form-control" value="<?php echo esc_attr( $settings['custom_ai_model'] ?? '' ); ?>" placeholder="gpt-4.1-mini">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_title_max_length"><?php echo esc_html__( 'Maksimum başlık uzunluğu', 'trendyol-woocommerce-importer' ); ?></label>
+					<input type="number" id="gemini_title_max_length" name="gemini_title_max_length" class="form-control" min="40" max="200" value="<?php echo esc_attr( $settings['gemini_title_max_length'] ?? 160 ); ?>">
+				</div>
+
+				<div class="form-group">
+					<label for="gemini_title_prompt"><?php echo esc_html__( 'Ek AI başlık talimatı', 'trendyol-woocommerce-importer' ); ?></label>
+					<textarea id="gemini_title_prompt" name="gemini_title_prompt" class="form-control" rows="6" placeholder="Sadece kısa e-ticaret başlığı üret."><?php echo esc_textarea( $settings['gemini_title_prompt'] ?? '' ); ?></textarea>
+				</div>
+			</div>
+
+			<div class="divider"></div>
+
+			<div class="trendyol-section">
 				<h3><?php echo esc_html__( '⚙️ Diğer Ayarlar', 'trendyol-woocommerce-importer' ); ?></h3>
 
 				<div class="form-group">

@@ -84,13 +84,107 @@ if ( ! function_exists( 'get_trendyol_rsd_kuru' ) ) {
 
 if ( ! function_exists( 'set_trendyol_euro_kuru' ) ) {
 	function set_trendyol_euro_kuru( $kur ) {
-		update_option( 'trendyol_euro_kur', floatval( $kur ) );
+		$kur = floatval( $kur );
+		update_option( 'trendyol_euro_kur', $kur );
+		$file = TRENDYOL_IMPORTER_PATH . 'data/euro_kur.txt';
+		if ( is_writable( dirname( $file ) ) ) {
+			file_put_contents( $file, (string) $kur );
+		}
 	}
 }
 
 if ( ! function_exists( 'set_trendyol_rsd_kuru' ) ) {
 	function set_trendyol_rsd_kuru( $kur ) {
-		update_option( 'trendyol_rsd_kur', floatval( $kur ) );
+		$kur = floatval( $kur );
+		update_option( 'trendyol_rsd_kur', $kur );
+		$file = TRENDYOL_IMPORTER_PATH . 'data/rsd_kur.txt';
+		if ( is_writable( dirname( $file ) ) ) {
+			file_put_contents( $file, (string) $kur );
+		}
+	}
+}
+
+if ( ! function_exists( 'get_trendyol_bam_kuru' ) ) {
+	function get_trendyol_bam_kuru() {
+		$file = TRENDYOL_IMPORTER_PATH . 'data/bam_kur.txt';
+
+		if ( file_exists( $file ) ) {
+			$val = trim( (string) file_get_contents( $file ) );
+			$val = str_replace( ',', '.', $val );
+
+			if ( is_numeric( $val ) && (float) $val > 0 ) {
+				return (float) $val;
+			}
+		}
+
+		$val = get_option( 'trendyol_bam_kur', 1.93 );
+		return ( is_numeric( $val ) && floatval( $val ) > 0 ) ? floatval( $val ) : 1.93;
+	}
+}
+
+if ( ! function_exists( 'set_trendyol_bam_kuru' ) ) {
+	function set_trendyol_bam_kuru( $kur ) {
+		$kur = floatval( $kur );
+		update_option( 'trendyol_bam_kur', $kur );
+		$file = TRENDYOL_IMPORTER_PATH . 'data/bam_kur.txt';
+		if ( is_writable( dirname( $file ) ) ) {
+			file_put_contents( $file, (string) $kur );
+		}
+	}
+}
+
+if ( ! function_exists( 'trendyol_get_active_currency' ) ) {
+	function trendyol_get_active_currency() {
+		$currency = get_option( 'trendyol_price_currency', 'rsd' );
+		if ( in_array( $currency, array( 'rsd', 'bam', 'eur' ), true ) ) {
+			return $currency;
+		}
+		return 'rsd';
+	}
+}
+
+if ( ! function_exists( 'trendyol_active_currency_price' ) ) {
+	function trendyol_active_currency_price( $tl_fiyat, $kategori_ad, $euro_kur, $default_kargo = 0, $default_marj = 1.3 ) {
+		$currency = trendyol_get_active_currency();
+
+		if ( 'bam' === $currency ) {
+			$bam_kur = get_trendyol_bam_kuru();
+			return trendyol_final_fiyat_rsd( $tl_fiyat, $kategori_ad, $euro_kur, $bam_kur, $default_kargo, $default_marj );
+		}
+
+		if ( 'eur' === $currency ) {
+			$tl_fiyat = floatval( str_replace( ',', '.', trim( $tl_fiyat ) ) );
+			$euro_kur = floatval( str_replace( ',', '.', trim( $euro_kur ) ) );
+
+			if ( $tl_fiyat <= 0 || $euro_kur < 0.01 ) {
+				return 0;
+			}
+
+			$kargo    = $default_kargo;
+			$marj     = $default_marj;
+			$kat_norm = trendyol_normalize_cat( $kategori_ad );
+
+			$arr = get_option( 'trendyol_kargo_maliyetleri', array() );
+			if ( is_array( $arr ) && isset( $arr[ $kat_norm ] ) ) {
+				$v = $arr[ $kat_norm ];
+				if ( isset( $v['kargo'] ) ) {
+					$kargo = floatval( str_replace( ',', '.', $v['kargo'] ) );
+				}
+				if ( isset( $v['marj'] ) ) {
+					$marj = floatval( str_replace( ',', '.', $v['marj'] ) );
+				}
+			}
+
+			$euro  = $tl_fiyat / $euro_kur;
+			$euro2 = $euro + $kargo;
+			$euro3 = $euro2 * $marj;
+
+			return round( $euro3, 2 );
+		}
+
+		// Varsayılan: RSD
+		$rsd_kur = get_trendyol_rsd_kuru();
+		return trendyol_final_fiyat_rsd( $tl_fiyat, $kategori_ad, $euro_kur, $rsd_kur, $default_kargo, $default_marj );
 	}
 }
 

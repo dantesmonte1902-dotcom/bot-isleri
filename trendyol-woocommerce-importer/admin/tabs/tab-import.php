@@ -65,6 +65,8 @@ if (isset($_SESSION['trendyol_preview_data'])):
 		<input type="hidden" name="product_images" value="<?php echo esc_attr(json_encode($product_data['images'])); ?>">
 		<input type="hidden" name="product_content" value="<?php echo esc_attr($product_data['content']); ?>">
 		<input type="hidden" name="product_url" value="<?php echo esc_attr($product_data['url']); ?>">
+		<input type="hidden" name="product_category" value="<?php echo esc_attr(isset($product_data['category']) ? $product_data['category'] : ''); ?>">
+		<input type="hidden" name="product_brand" value="<?php echo esc_attr(isset($product_data['brand']) ? $product_data['brand'] : ''); ?>">
 		<button type="submit" class="button button-primary" style="margin-right:10px;"><?php echo esc_html__('✅ WooCommerce\'e İçe Aktar', 'trendyol-woocommerce-importer'); ?></button>
 		<a href="<?php echo esc_url(admin_url('admin.php?page=trendyol-importer&tab=import&cancelpreview=1')); ?>" class="button"><?php echo esc_html__('İptal', 'trendyol-woocommerce-importer'); ?></a>
 	</form>

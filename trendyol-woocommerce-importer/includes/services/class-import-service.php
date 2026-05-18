@@ -51,6 +51,7 @@ class Trendyol_Import_Service {
 
 	public function import_from_form_data( $product_data ) {
 		$product_data = $this->normalize_product_data( $product_data );
+		$product_data = $this->hydrate_product_data_from_url( $product_data );
 
 		$importer   = new Trendyol_Product_Importer( $product_data );
 		$product_id = $importer->import();
@@ -145,5 +146,59 @@ class Trendyol_Import_Service {
 			'category' => isset( $product_data['category'] ) ? sanitize_text_field( $product_data['category'] ) : '',
 			'brand'    => isset( $product_data['brand'] ) ? sanitize_text_field( $product_data['brand'] ) : '',
 		);
+	}
+
+	private function hydrate_product_data_from_url( $product_data ) {
+		$url = isset( $product_data['url'] ) ? esc_url_raw( $product_data['url'] ) : '';
+
+		if ( empty( $url ) ) {
+			return $product_data;
+		}
+
+		$needs_refresh = empty( $product_data['sizes'] )
+			|| empty( $product_data['images'] )
+			|| empty( $product_data['category'] )
+			|| empty( $product_data['brand'] );
+
+		if ( ! $needs_refresh ) {
+			return $product_data;
+		}
+
+		$scraper = new Trendyol_Scraper( $url );
+		$fresh   = $scraper->scrape();
+
+		if ( is_wp_error( $fresh ) || ! is_array( $fresh ) ) {
+			return $product_data;
+		}
+
+		if ( empty( $product_data['name'] ) && ! empty( $fresh['name'] ) ) {
+			$product_data['name'] = sanitize_text_field( $fresh['name'] );
+		}
+
+		if ( ( ! isset( $product_data['price'] ) || (float) $product_data['price'] <= 0 ) && ! empty( $fresh['price'] ) ) {
+			$product_data['price'] = floatval( $fresh['price'] );
+		}
+
+		if ( empty( $product_data['sizes'] ) && ! empty( $fresh['sizes'] ) && is_array( $fresh['sizes'] ) ) {
+			$product_data['sizes'] = array_values( array_filter( array_map( 'sanitize_text_field', $fresh['sizes'] ) ) );
+		}
+
+		if ( empty( $product_data['images'] ) && ! empty( $fresh['images'] ) && is_array( $fresh['images'] ) ) {
+			$product_data['images'] = array_values( array_filter( array_map( 'esc_url_raw', $fresh['images'] ) ) );
+		}
+
+		if ( empty( $product_data['content'] ) && ! empty( $fresh['content'] ) ) {
+			$product_data['content'] = wp_kses_post( $fresh['content'] );
+		}
+
+		if ( empty( $product_data['category'] ) && ! empty( $fresh['category'] ) ) {
+			$product_data['category'] = sanitize_text_field( $fresh['category'] );
+		}
+
+		if ( empty( $product_data['brand'] ) && ! empty( $fresh['brand'] ) ) {
+			$product_data['brand'] = sanitize_text_field( $fresh['brand'] );
+		}
+
+		return $product_data;
 	}
 }

@@ -1,0 +1,162 @@
+Trendyol WooCommerce İçe Aktarıcı - Güncelleme Notları
+======================================================
+
+Tarih: 2026-05-18
+
+AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
+--------------------------------------------------------
+
+1. Toplu AI başlık üretim akışı JSON tabanlı hale getirildi.
+   Batch modunda AI artık sadece JSON dizi döndürmek zorunda.
+
+2. Batch prompt yapısı değiştirildi.
+   AI'den yalnızca şu yapıda cevap isteniyor:
+   [{"id":1,"title":"..."},{"id":2,"title":"..."}]
+
+3. Batch eşleştirme sıra numarasına göre değil id alanına göre yapılıyor.
+   AI sıralamayı bozsa bile doğru ürün doğru başlıkla eşleşiyor.
+
+4. JSON validation katmanı eklendi.
+   AI çıktısı için şu kontroller yapılıyor:
+   - JSON geçerli mi
+   - input ürün sayısı ile output item sayısı eşit mi
+   - id alanları eksiksiz mi
+   - duplicate veya beklenmeyen id var mı
+   - title alanı boş mu
+
+5. JSON parse / item count / eksik-fazla kayıt hatalarında batch otomatik retry alıyor.
+   Retry limiti mevcut ayar üzerinden çalışıyor.
+
+6. Retry sonrasında batch hâlâ başarısızsa provider fallback zinciri güçlendirildi.
+   Batch modunda provider sırası genişletilerek Gemini -> OpenRouter -> Custom AI
+   hattı da devreye girebiliyor.
+
+7. Her batch denemesi için log detayları artırıldı.
+   Loglara artık şu alanlar yazılıyor:
+   - batch id
+   - provider adı
+   - input count
+   - output count
+   - success / fail durumu
+   - deneme numarası
+
+8. Tekli ürün başlığı üretim akışı korunarak bırakıldı.
+   Sadece toplu batch işleme sistemi JSON tabanlı yeni mantığa taşındı.
+
+9. Rate limit, retry-after ve dakika başı istek limiti desteği korunmaya devam ediyor.
+
+10. Başarılı batch sonrası bekleme ve throttling davranışı korunarak mevcut sistem bozulmadı.
+
+11. Toplu AI ürün başlığı üretimindeki "ürün sırasıyla eşleştirilemedi" hatasına neden olan
+    numaralı liste bağımlılığı kaldırıldı.
+
+12. Admin paneldeki mevcut AI batch ayarları kullanılmaya devam ediyor.
+
+13. Batch fallback zinciri güvenli hale getirildi.
+    Eksik yapılandırmalı provider'lar artık request atmadan otomatik skip ediliyor.
+
+14. Provider skip sebepleri loglanıyor.
+    Örnek nedenler:
+    - missing api key
+    - missing endpoint
+    - missing model
+
+15. Batch modunda fallback listesi sadece geçerli provider'lardan kuruluyor.
+    Bu sayede boş Custom AI ayarları tüm batch işlemini fail etmiyor.
+
+16. OpenAI uyumlu provider istekleri artık kontrollü output token limiti ile gönderiliyor.
+    Bu sayede OpenRouter varsayılan çok yüksek max token isteği yüzünden batch hata vermez.
+
+17. Trendyol arama / listeleme sayfalarında (örn: /sr?wg=2&wc=109&fp=true&sst=BEST_SELLER)
+    ürün linklerini regex ile ayıklamak teorik olarak mümkün olsa da asıl sorun fetch aşamasında oluşuyor.
+    Mevcut wp_remote_get ve cURL istekleri bu sayfalarda HTTP 403 dönüyor.
+    Tespit: sorun parser değil, Trendyol'un arama/listeleme sayfalarındaki bot koruması / WAF engeli.
+    Yani WordPress sunucusundan gelen basit browser-benzeri istekler HTML'yi alamadan engelleniyor.
+    /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/ty.html dosyası ise tarayıcıdan
+    manuel kaydedilmiş bir örnek olduğu için içinde ürün linki patternleri bulunabiliyor; bu canlı fetch'in
+    çalıştığını değil, sadece HTML elde edilirse linklerin ayıklanabileceğini gösteriyor.
+    Sonuç: /sr tabanlı arama sayfaları için mevcut scraper ile doğrudan canlı HTML çekmek güvenilir değil.
+    Bu tip sayfalarda veri almak için farklı bir kaynak (izinli API, tarayıcı otomasyonu veya önceden alınmış HTML)
+    gerekir.
+
+18. "Sadece PHP ile kesin çözüm üretebilir miyiz?" sorusunun cevabı pratikte hayır.
+    Normal PHP istekleri (wp_remote_get, cURL, header/cookie taklidi) Trendyol bot korumasını aşmayı garanti etmez.
+    Yani salt PHP ile çalışan ve her zaman stabil sonuç veren bir çözüm burada garanti edilemez.
+    PHP tarafında ancak şu senaryolar güvenilir kabul edilebilir:
+    - Trendyol'un izin verdiği resmi / yasal bir API kullanılırsa
+    - HTML başka bir katmanda gerçek tarayıcı ile alınıp PHP'ye verilirse
+    - Önceden kaydedilmiş HTML veya ürün link listesi PHP içinde işlenirse
+    Bunun dışında "PHP tek başına canlı /sr sayfasını her zaman çeker" şeklinde kesin bir çözüm bu vaka için doğru değildir.
+
+19. Kesin çözüm önerisi burada kalıcı dursun:
+    Eğer bu iş için gerçekten stabil ve tekrar edilebilir bir çözüm isteniyorsa öneri şudur:
+    - En doğru çözüm: Trendyol'un izin verdiği resmi / yasal bir API kullanmak
+    - İkinci sağlam çözüm: HTML'i gerçek tarayıcı ile başka bir katmanda alıp PHP tarafına vermek
+    - PHP hosting içinde en pratik çözüm: önceden alınmış HTML veya doğrudan ürün link listesi ile import yapmak
+    Kısa özet:
+    "Canlı /sr sayfasını sadece PHP ile sürekli ve garantili çekmek" bu vaka için kesin çözüm değildir.
+    "Kalıcı ve anlaşılır çözüm" olarak bu dosyada tutulması gereken öneri, API / browser katmanı / hazır link listesi üçlüsüdür.
+
+20. "PHP hariç kesin çözüm var mı?" sorusunun kısa cevabı: evet, PHP dışı tarafta daha sağlam çözümler vardır.
+    En net öneri sırası:
+    - Resmi / izinli API varsa onu kullanmak
+    - Gerçek tarayıcı otomasyonu (Playwright, Puppeteer, Selenium benzeri) ile listeyi almak
+    - Ayrı bir scraping servisi / worker kurup ürün linklerini orada toplamak
+    - Bu servis çıktısını WordPress'e JSON, CSV veya ürün link listesi olarak vermek
+    Yani kesin çözüme en yakın yaklaşım, fetch işlemini WordPress içindeki basit PHP request katmanından çıkarmaktır.
+    Bu vaka için PHP hariç tarafta "browser automation + ayrı servis + düzenli veri aktarımı" modeli,
+    canlı /sr sayfasını doğrudan WordPress-PHP ile çekmeye göre çok daha stabil ve sürdürülebilir çözümdür.
+
+21. Admin paneline yeni sekme eklendi: Tarayıcı Otomasyonu
+    admin.php?page=trendyol-importer&tab=browser-automation
+    Bu sekme artık iki mod sunar:
+    - Sunucuda Node.js + Playwright varsa kategori adı ve kategori linki ile doğrudan çekim
+    - İstenirse manuel JSON / link listesi / HTML yapıştırarak kayıt
+    Ayrıca sekme içinde yeni "Browser Automation Settings" bölümü vardır:
+    - Manual Node.js Binary Path
+    - Working Directory
+    - Enable Manual Node Path
+    - Test Node.js
+    - Test Playwright
+    - Son test sonucu
+    Sekme şunları sağlar:
+    - Kategoriler sekmesine benzer şekilde kategori adı + kategori linki eklemeyi sağlar
+    - Kaydedilen satırlarda "Ürün Linklerini Çek" aksiyonu sunar
+    - Manuel Node.js yolu varsa önce onu, sonra PATH içindeki node'u, sonra fallback yolları dener
+    - Working Directory içinde `require('playwright')` ve `chromium.launch()` testi yapar
+    - Alternatif olarak yapıştırılan içerikten Trendyol ürün linklerini ayıklar
+    - Sonucu data klasörüne [kategori]-urunleri.txt olarak kaydeder
+    - Böylece Toplu Ekle sekmesinde hemen kullanılabilir hale getirir
+
+22. Yeni tabın pratik kullanım akışı
+    1) Tarayıcı otomasyonu sekmesinde gerekirse Node.js Binary Path ve Working Directory ayarlarını gir
+    2) "Test Node.js" ve "Test Playwright" ile ortamı doğrula
+    3) Kategori adını ve kategori linkini ekle
+    4) "Ürün Linklerini Çek" düğmesine bas
+    5) Sistem gerçek tarayıcı ile ürün linklerini toplayıp txt dosyasına kaydeder
+    6) Oluşan txt dosyasını Toplu Ekle sekmesinde kullan
+    Eğer sunucuda Playwright kurulu değilse aynı sekmedeki manuel yapıştırma alanları yedek olarak kullanılabilir.
+    Bu yapı, canlı /sr sayfasını WordPress-PHP ile çekmeye çalışmaktan daha kontrollü bir çözümdür.
+
+23. Node.js ve Playwright nereye kurulmalı?
+    Eklentinin görebilmesi için kurulum WordPress'i çalıştıran AYNI sunucuda olmalıdır.
+    Yani kendi bilgisayarınıza kurmanız yetmez; kurulum web sitenizin barındığı sunucuda yapılmalıdır.
+    Yeni sistem şu sırayla dener:
+    - Admin tarafından girilen manual Node.js Binary Path
+    - PATH içindeki `node`
+    - Fallback yollar (`/usr/bin/node`, `/usr/local/bin/node`, Windows node.exe konumları)
+    Playwright ise seçilen Working Directory içinde test edilir.
+    Yani `node_modules/playwright` klasörü bu çalışma dizininden erişilebilir olmalıdır.
+    Kısacası:
+    - WordPress başka sunucuda, Node.js başka sunucuda olursa eklenti göremez
+    - Node.js ve Playwright, WordPress/PHP'nin çalıştığı sunucuda olmalıdır
+    - Sunucuda terminalden `node -v`, `node -e "require('playwright'); console.log('PLAYWRIGHT_OK')"` ve gerekiyorsa `npx playwright install chromium` çalışıyorsa eklenti de büyük olasılıkla görebilir
+
+Değişen dosyalar
+----------------
+
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/includes/services/class-browser-automation-service.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/admin/tabs/tab-browser-automation.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/admin/admin-page.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/trendyol-woocommerce-importer.php
+- /home/runner/work/bot-isleri/bot-isleri/trendyol-woocommerce-importer/readme.txt

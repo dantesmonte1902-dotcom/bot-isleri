@@ -18,9 +18,21 @@ $primary_tabs = array(
 		'icon'  => '📦',
 		'label' => __( 'Toplu Ekle', 'trendyol-woocommerce-importer' ),
 	),
+	'link-export' => array(
+		'icon'  => '🔗',
+		'label' => __( 'Link Dışa Aktar', 'trendyol-woocommerce-importer' ),
+	),
+	'featured-image-export' => array(
+		'icon'  => '🖼️',
+		'label' => __( 'Görsel İndir', 'trendyol-woocommerce-importer' ),
+	),
 	'categories' => array(
 		'icon'  => '📂',
 		'label' => __( 'Kategoriler', 'trendyol-woocommerce-importer' ),
+	),
+	'browser-automation' => array(
+		'icon'  => '🤖',
+		'label' => __( 'Tarayıcı Otomasyonu', 'trendyol-woocommerce-importer' ),
 	),
 	'history' => array(
 		'icon'  => '📜',
@@ -45,6 +57,10 @@ $tool_tabs = array(
 		'icon'  => '📝',
 		'label' => __( 'Başlık Güncelle', 'trendyol-woocommerce-importer' ),
 	),
+	'title-ai-update' => array(
+		'icon'  => '🤖',
+		'label' => __( 'Başlık Güncelle AI', 'trendyol-woocommerce-importer' ),
+	),
 	'batch-variant-stock' => array(
 		'icon'  => '📊',
 		'label' => __( 'Varyant Stok', 'trendyol-woocommerce-importer' ),
@@ -60,12 +76,16 @@ $all_tabs = $primary_tabs + $tool_tabs;
 $tab_files = array(
 	'import'              => 'admin/tabs/tab-import.php',
 	'bulk-import'         => 'admin/tabs/tab-bulk-import.php',
+	'link-export'         => 'admin/tabs/tab-link-export.php',
+	'featured-image-export' => 'admin/tabs/tab-featured-image-export.php',
 	'categories'          => 'admin/tabs/tab-categories.php',
+	'browser-automation'  => 'admin/tabs/tab-browser-automation.php',
 	'history'             => 'admin/tabs/tab-history.php',
 	'settings'            => 'admin/tabs/tab-settings.php',
 	'kargo'               => 'admin/tabs/tab-kargo.php',
 	'bulk-price-update'   => 'admin/tabs/tab-bulk-price-update.php',
 	'title-bulk-update'   => 'admin/tabs/tab-title-bulk-update.php',
+	'title-ai-update'     => 'admin/tabs/tab-title-ai-update.php',
 	'batch-variant-stock' => 'admin/tabs/tab-batch-variant-stock.php',
 	'scraper-diagnostic'  => 'admin/tabs/tab-scraper-diagnostic.php',
 );
