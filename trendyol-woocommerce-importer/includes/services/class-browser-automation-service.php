@@ -334,6 +334,18 @@ const { chromium } = require('playwright');
   });
 
   const allLinks = new Set();
+  const collectRawProductLinks = async () => {
+    const anchorLinks = await page.locator('a').evaluateAll((anchors) =>
+      anchors.flatMap((anchor) => [anchor.href || '', anchor.getAttribute('href') || '']).filter(Boolean)
+    );
+    const html = await page.content();
+    const absoluteMatches = html.match(/https?:\/\/(?:www\.)?trendyol\.com\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+    const relativeMatches = html.match(/\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+
+    return Array.from(new Set(anchorLinks.concat(absoluteMatches, relativeMatches)))
+      .map((link) => String(link).trim())
+      .filter((link) => link.includes('-p-'));
+  };
 
   for (let pageIndex = 1; pageIndex <= 50; pageIndex += 1) {
     const separator = startUrl.includes('?') ? '&' : '?';
@@ -342,15 +354,7 @@ const { chromium } = require('playwright');
     await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForTimeout(2500);
 
-    const links = await page.locator('a[href*="-p-"]').evaluateAll((anchors) =>
-      anchors
-        .map((anchor) => anchor.href || anchor.getAttribute('href') || '')
-        .filter(Boolean)
-    );
-
-    const normalized = links
-      .map((link) => link.split('?')[0])
-      .filter((link) => /trendyol\.com\/.+-p-\d+$/i.test(link));
+    const normalized = await collectRawProductLinks();
 
     if (!normalized.length) {
       break;
@@ -538,6 +542,18 @@ try {
   });
 
   const allLinks = new Set();
+  const collectRawProductLinks = async () => {
+    const anchorLinks = await page.locator('a').evaluateAll((anchors) =>
+      anchors.flatMap((anchor) => [anchor.href || '', anchor.getAttribute('href') || '']).filter(Boolean)
+    );
+    const html = await page.content();
+    const absoluteMatches = html.match(/https?:\/\/(?:www\.)?trendyol\.com\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+    const relativeMatches = html.match(/\/[^"'\\\s<>]+?-p-\d+[^"'\\\s<>]*/gi) || [];
+
+    return Array.from(new Set(anchorLinks.concat(absoluteMatches, relativeMatches)))
+      .map((link) => String(link).trim())
+      .filter((link) => link.includes('-p-'));
+  };
 
   for (let pageIndex = 1; pageIndex <= maxPages; pageIndex += 1) {
     const currentUrl = new URL(startUrl);
@@ -546,15 +562,7 @@ try {
     await page.goto(currentUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForTimeout(2500);
 
-    const links = await page.locator('a[href*="-p-"]').evaluateAll((anchors) =>
-      anchors
-        .map((anchor) => anchor.href || anchor.getAttribute('href') || '')
-        .filter(Boolean)
-    );
-
-    const normalized = links
-      .map((link) => String(link).split('?')[0])
-      .filter((link) => /trendyol\.com\/.+-p-\d+$/i.test(link));
+    const normalized = await collectRawProductLinks();
 
     if (!normalized.length) {
       break;
