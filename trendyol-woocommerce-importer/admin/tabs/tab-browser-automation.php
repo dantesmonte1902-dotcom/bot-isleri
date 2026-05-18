@@ -121,8 +121,33 @@ isset( $result['maxpages'] ) ? intval( $result['maxpages'] ) : 0
 $_SESSION['trendyol_last_bulkfile'] = $result['file'];
 }
 
-wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
-exit;
+	wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
+	exit;
+}
+
+if ( isset( $_GET['fetchbrowsersourcecat'] ) ) {
+	check_admin_referer( 'trendyol_fetch_browser_source_category_' . intval( $_GET['fetchbrowsersourcecat'] ) );
+
+	$result = $automation_service->fetch_category_source_file( wp_unslash( $_GET['fetchbrowsersourcecat'] ) );
+
+	if ( is_wp_error( $result ) ) {
+		$_SESSION['browser_automation_notice'] = array(
+			'type'    => 'error',
+			'message' => $result->get_error_message(),
+		);
+	} else {
+		$_SESSION['browser_automation_notice'] = array(
+			'type'    => 'success',
+			'message' => sprintf(
+				'📄 %1$s kategorisinin kaynak dosyası kaydedildi: %2$s',
+				$result['name'],
+				$result['file']
+			),
+		);
+	}
+
+	wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
+	exit;
 }
 
 if (
@@ -153,8 +178,37 @@ $result['file']
 $_SESSION['trendyol_last_bulkfile'] = $result['file'];
 }
 
-wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
-exit;
+	wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
+	exit;
+}
+
+if (
+	isset( $_POST['browser_automation_source_save'], $_POST['_wpnonce'] ) &&
+	wp_verify_nonce( $_POST['_wpnonce'], 'trendyol_browser_automation_source_save' )
+) {
+	$result = $automation_service->save_live_source_file(
+		isset( $_POST['browser_source_name'] ) ? sanitize_text_field( wp_unslash( $_POST['browser_source_name'] ) ) : '',
+		isset( $_POST['browser_source_url'] ) ? esc_url_raw( wp_unslash( $_POST['browser_source_url'] ) ) : ''
+	);
+
+	if ( is_wp_error( $result ) ) {
+		$_SESSION['browser_automation_notice'] = array(
+			'type'    => 'error',
+			'message' => $result->get_error_message(),
+		);
+	} else {
+		$_SESSION['browser_automation_notice'] = array(
+			'type'    => 'success',
+			'message' => sprintf(
+				'📄 %1$s için kaynak HTML kaydedildi: %2$s',
+				$result['name'],
+				$result['file']
+			),
+		);
+	}
+
+	wp_redirect( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation' ) );
+	exit;
 }
 
 if ( isset( $_SESSION['browser_automation_notice'] ) && is_array( $_SESSION['browser_automation_notice'] ) ) {
@@ -281,6 +335,7 @@ Browser automation çekiminde kaç sayfa gezileceğini buradan değiştirebilirs
 <th style="width:35%">İsim</th>
 <th>Link</th>
 <th width="150">Ürün Listesi</th>
+<th width="150">Kaynak Dosyası</th>
 <th width="60"></th>
 </tr>
 </thead>
@@ -297,6 +352,11 @@ Browser automation çekiminde kaç sayfa gezileceğini buradan değiştirebilirs
 </a>
 </td>
 <td>
+<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation&fetchbrowsersourcecat=' . $category['id'] ), 'trendyol_fetch_browser_source_category_' . $category['id'] ) ); ?>" class="button button-small">
+Kaynağı Çek
+</a>
+</td>
+<td>
 <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin.php?page=trendyol-importer&tab=browser-automation&delbrowsercat=' . $category['id'] ), 'trendyol_delete_browser_category_' . $category['id'] ) ); ?>" onclick="return confirm('Silinsin mi?')" class="button">Sil</a>
 </td>
 </tr>
@@ -308,8 +368,44 @@ Browser automation çekiminde kaç sayfa gezileceğini buradan değiştirebilirs
 <p style="margin-top:12px;font-size:12px;color:#64748b;">
 Bu akış, önce manuel ayarlanan Node.js / Working Directory bilgisini kullanır; bulunamazsa PATH ve fallback konumlara döner.<br>
 Çekilen ürün linkleri “<b>data</b>” klasörü altında <b>[kategoriadı]-urunleri.txt</b> olarak kaydedilir.<br>
+Kaynak dosyasını çekerseniz tam render edilmiş HTML “<b>data</b>” klasörü altında <b>[kategoriadı]-kaynak.html</b> olarak kaydedilir.<br>
 Toplu içe aktarma sekmesinden anında kullanabilirsiniz.
 </p>
+</div>
+
+<div class="trendyol-card" style="margin-bottom:24px;">
+<h3 style="margin-bottom:14px;">Kaynak Dosyasının Tamamını Çek</h3>
+<p style="max-width:960px;">
+Ürün linki bulunamadığında aynı URL'nin render edilmiş kaynak HTML dosyasını alıp inceleyebilirsiniz.
+Bu alan, sayfanın tarayıcıda oluşan son HTML çıktısını <strong>UTF-8</strong> olarak kaydeder.
+</p>
+<form method="post">
+<?php wp_nonce_field( 'trendyol_browser_automation_source_save' ); ?>
+<input type="hidden" name="browser_automation_source_save" value="1">
+
+<table class="form-table" role="presentation">
+<tbody>
+<tr>
+<th scope="row"><label for="browser_source_name">Kategori / Dosya Adı</label></th>
+<td>
+<input type="text" name="browser_source_name" id="browser_source_name" class="regular-text" required placeholder="Örn: deneme-kaynak" value="<?php echo isset( $_POST['browser_source_name'] ) ? esc_attr( wp_unslash( $_POST['browser_source_name'] ) ) : ''; ?>">
+<p class="description">Dosya adı <code>[kategoriadi]-kaynak.html</code> olarak oluşturulur.</p>
+</td>
+</tr>
+<tr>
+<th scope="row"><label for="browser_source_url">Kaynak URL</label></th>
+<td>
+<input type="url" name="browser_source_url" id="browser_source_url" class="regular-text" required placeholder="https://www.trendyol.com/sr?..." value="<?php echo isset( $_POST['browser_source_url'] ) ? esc_attr( wp_unslash( $_POST['browser_source_url'] ) ) : ''; ?>">
+<p class="description">Sayfanın render edilmiş tam HTML kaynağı kaydedilir.</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+<button type="submit" class="button button-secondary">Kaynak Dosyasını Çek ve Kaydet</button>
+</p>
+</form>
 </div>
 
 <div class="trendyol-card" style="margin-bottom:24px;">

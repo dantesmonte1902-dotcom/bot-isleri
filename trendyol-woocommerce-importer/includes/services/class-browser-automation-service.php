@@ -249,18 +249,31 @@ file_put_contents( $this->categories_file, implode( "\n", $lines ) . "\n" );
 return true;
 }
 
-public function fetch_category_links( $index ) {
-$index = intval( $index );
-$lines = file_exists( $this->categories_file ) ? file( $this->categories_file, FILE_IGNORE_NEW_LINES ) : array();
+	public function fetch_category_links( $index ) {
+	$index = intval( $index );
+	$lines = file_exists( $this->categories_file ) ? file( $this->categories_file, FILE_IGNORE_NEW_LINES ) : array();
 
 if ( ! isset( $lines[ $index ] ) ) {
 return new WP_Error( 'category_not_found', 'Kategori bulunamadı.' );
 }
 
-list( $name, $url ) = explode( '|', $lines[ $index ], 2 );
+	list( $name, $url ) = explode( '|', $lines[ $index ], 2 );
 
-return $this->collect_links_from_live_url( $name, $url, $this->get_maxpages() );
-}
+	return $this->collect_links_from_live_url( $name, $url, $this->get_maxpages() );
+	}
+
+	public function fetch_category_source_file( $index ) {
+	$index = intval( $index );
+	$lines = file_exists( $this->categories_file ) ? file( $this->categories_file, FILE_IGNORE_NEW_LINES ) : array();
+
+	if ( ! isset( $lines[ $index ] ) ) {
+	return new WP_Error( 'category_not_found', 'Kategori bulunamadı.' );
+	}
+
+	list( $name, $url ) = explode( '|', $lines[ $index ], 2 );
+
+	return $this->save_live_source_file( $name, $url );
+	}
 
 public function collect_links_from_live_url( $category_name, $source_url, $maxpages = 50 ) {
 $category_name = trim( (string) $category_name );
@@ -281,8 +294,29 @@ if ( is_wp_error( $links ) ) {
 return $links;
 }
 
-return $this->save_links_to_file( $category_name, $links, $source_url, array( 'playwright' ), $maxpages );
-}
+	return $this->save_links_to_file( $category_name, $links, $source_url, array( 'playwright' ), $maxpages );
+	}
+
+	public function save_live_source_file( $category_name, $source_url ) {
+	$category_name = trim( (string) $category_name );
+	$source_url    = trim( (string) $source_url );
+
+	if ( '' === $category_name ) {
+	return new WP_Error( 'empty_category_name', 'Kaynak dosyası için kategori adı zorunludur.' );
+	}
+
+	if ( '' === $source_url || ! filter_var( $source_url, FILTER_VALIDATE_URL ) ) {
+	return new WP_Error( 'invalid_source_url', 'Kaynak dosyası için geçerli bir URL girin.' );
+	}
+
+	$html = $this->fetch_page_source_with_browser_automation( $source_url );
+
+	if ( is_wp_error( $html ) ) {
+	return $html;
+	}
+
+	return $this->save_source_to_file( $category_name, $html, $source_url );
+	}
 
 public function save_collected_links( $category_name, $links_text = '', $html_text = '', $source_url = '' ) {
 $category_name = trim( (string) $category_name );
@@ -489,8 +523,32 @@ $links[] = $normalized;
 }
 }
 
-return array_values( array_unique( $links ) );
-}
+	return array_values( array_unique( $links ) );
+	}
+
+	private function save_source_to_file( $category_name, $html, $source_url = '' ) {
+	$filename = $this->data_dir . sanitize_title( $category_name ) . '-kaynak.html';
+	$html     = (string) $html;
+
+	if ( '' === trim( $html ) ) {
+	return new WP_Error( 'empty_source_html', 'Kaydedilecek kaynak HTML boş geldi.' );
+	}
+
+	if ( false === file_put_contents( $filename, $html ) ) {
+	return new WP_Error( 'write_failed', 'Kaynak HTML dosyaya yazılamadı.' );
+	}
+
+	error_log( 'Fetched source HTML bytes: ' . strlen( $html ) );
+	error_log( 'Saved source to: ' . $filename );
+
+	return array(
+	'name'       => $category_name,
+	'file'       => basename( $filename ),
+	'full_path'  => $filename,
+	'source_url' => $source_url,
+	'size'       => strlen( $html ),
+	);
+	}
 
 private function extract_product_links_from_html( $html ) {
 $links    = array();
@@ -600,13 +658,48 @@ $normalized_links[] = $normalized;
 $normalized_links = array_values( array_unique( $normalized_links ) );
 
 if ( empty( $normalized_links ) ) {
-return new WP_Error( 'browser_automation_no_links', 'Gerçek tarayıcı otomasyonu çalıştı ancak ürün linki bulunamadı. Debug: ' . substr( trim( (string) $result['stderr'] ), 0, 500 ) );
-}
+	return new WP_Error( 'browser_automation_no_links', 'Gerçek tarayıcı otomasyonu çalıştı ancak ürün linki bulunamadı. Gerekirse alttaki kaynak dosyası çekme bölümünü kullanın. Debug: ' . substr( trim( (string) $result['stderr'] ), 0, 500 ) );
+	}
 
-return $normalized_links;
-}
+	return $normalized_links;
+	}
 
-private function build_runtime_playwright_script( $source_url, $maxpages ) {
+	private function fetch_page_source_with_browser_automation( $source_url ) {
+	if ( ! function_exists( 'proc_open' ) ) {
+	return new WP_Error( 'proc_open_missing', 'Sunucuda proc_open kapalı. Gerçek tarayıcı otomasyonu için proc_open açık olmalı.' );
+	}
+
+	$runtime_check = $this->test_playwright_runtime( false );
+
+	if ( is_wp_error( $runtime_check ) ) {
+	return $runtime_check;
+	}
+
+	$script = $this->build_runtime_page_source_script( $source_url );
+	$result = $this->run_node_command(
+	array(
+	'script'          => $script,
+	'filename_prefix' => 'playwright-fetch-source',
+	)
+	);
+
+	if ( is_wp_error( $result ) ) {
+	return $result;
+	}
+
+	$payload = json_decode( $result['stdout'], true );
+
+	if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $payload ) || empty( $payload['html'] ) || ! is_string( $payload['html'] ) ) {
+	return new WP_Error(
+	'browser_automation_invalid_source_output',
+	'Playwright kaynak çıktısı okunamadı. Stdout: ' . substr( trim( (string) $result['stdout'] ), 0, 500 ) . ' | Stderr: ' . substr( trim( (string) $result['stderr'] ), 0, 500 )
+	);
+	}
+
+	return $payload['html'];
+	}
+
+	private function build_runtime_playwright_script( $source_url, $maxpages ) {
 $encoded_url      = wp_json_encode( (string) $source_url );
 $encoded_maxpages = (int) $maxpages;
 $template         = <<<'SCRIPT'
@@ -750,8 +843,75 @@ SCRIPT;
 
 $template = str_replace( '__TARGET_URL__', $encoded_url, $template );
 
-return str_replace( '__MAX_PAGES__', (string) $encoded_maxpages, $template );
+	return str_replace( '__MAX_PAGES__', (string) $encoded_maxpages, $template );
+	}
+
+	private function build_runtime_page_source_script( $source_url ) {
+	$encoded_url = wp_json_encode( (string) $source_url );
+	$template    = <<<'SCRIPT'
+const startUrl = __TARGET_URL__;
+
+let browserLib;
+
+try {
+  browserLib = require('playwright');
+} catch (playwrightError) {
+  console.error('PLAYWRIGHT_MODULE_NOT_FOUND');
+  console.error(playwrightError && playwrightError.message ? playwrightError.message : playwrightError);
+  process.exit(2);
 }
+
+(async () => {
+  const browser = await browserLib.chromium.launch({ headless: true });
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 2200 },
+    locale: 'tr-TR',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+  });
+
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90000);
+
+  const waitForNetworkIdle = async () => {
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
+    } catch (error) {
+      console.error('Network idle wait timeout, continuing...');
+    }
+  };
+
+  await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await waitForNetworkIdle();
+
+  for (let scrollIndex = 0; scrollIndex < 5; scrollIndex += 1) {
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await page.waitForTimeout(1500);
+    await waitForNetworkIdle();
+  }
+
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+  await page.waitForTimeout(500);
+
+  const html = await page.content();
+  const title = await page.title();
+
+  console.error(`Fetched source HTML bytes: ${html.length}`);
+  console.error(`Page title: ${title}`);
+  console.log(JSON.stringify({ html, title, url: page.url() }));
+  await browser.close();
+})().catch((error) => {
+  console.error('PLAYWRIGHT_SOURCE_FETCH_FAILED');
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
+});
+SCRIPT;
+
+	return str_replace( '__TARGET_URL__', $encoded_url, $template );
+	}
 
 private function run_node_command( $command, $working_directory = '' ) {
 if ( ! function_exists( 'proc_open' ) ) {
