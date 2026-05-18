@@ -314,10 +314,11 @@ SCRIPT;
 			return new WP_Error( 'proc_open_missing', 'Sunucuda proc_open kapalı. Gerçek tarayıcı otomasyonu için proc_open açık olmalı.' );
 		}
 
-		$node_binary = $this->find_executable( array( 'node', '/usr/bin/node', '/usr/local/bin/node' ) );
+		$node_candidates = $this->get_node_executable_candidates();
+		$node_binary     = $this->find_executable( $node_candidates );
 
 		if ( '' === $node_binary ) {
-			return new WP_Error( 'node_missing', 'Sunucuda Node.js bulunamadı. Browser automation için Node.js ve Playwright kurulmalı.' );
+			return new WP_Error( 'node_missing', $this->get_node_missing_message( $node_candidates ) );
 		}
 
 		$temp_script = tempnam( get_temp_dir(), 'trendyol-browser-' );
@@ -486,6 +487,7 @@ SCRIPT;
 
 	private function find_executable( array $candidates ) {
 		$can_shell_exec = function_exists( 'shell_exec' );
+		$is_windows     = $this->is_windows();
 
 		foreach ( $candidates as $candidate ) {
 			$path = trim( (string) $candidate );
@@ -506,6 +508,22 @@ SCRIPT;
 				continue;
 			}
 
+			if ( $is_windows ) {
+				$resolved = trim( (string) shell_exec( 'where ' . escapeshellarg( $path ) . ' 2>NUL' ) );
+				if ( '' !== $resolved ) {
+					$resolved_paths = preg_split( '/\r\n|\r|\n/', $resolved );
+					if ( is_array( $resolved_paths ) ) {
+						foreach ( $resolved_paths as $resolved_path ) {
+							$resolved_path = trim( (string) $resolved_path );
+							if ( '' !== $resolved_path && is_executable( $resolved_path ) ) {
+								return $resolved_path;
+							}
+						}
+					}
+				}
+				continue;
+			}
+
 			$resolved = trim( (string) shell_exec( 'command -v ' . escapeshellarg( $path ) . ' 2>/dev/null' ) );
 
 			if ( '' !== $resolved && is_executable( $resolved ) ) {
@@ -514,6 +532,61 @@ SCRIPT;
 		}
 
 		return '';
+	}
+
+	private function get_node_executable_candidates() {
+		$candidates = array(
+			'node',
+			'/usr/bin/node',
+			'/usr/local/bin/node',
+		);
+
+		if ( $this->is_windows() ) {
+			$program_files = getenv( 'ProgramFiles' );
+			$program_files_x86 = getenv( 'ProgramFiles(x86)' );
+			$local_app_data = getenv( 'LocalAppData' );
+
+			if ( $program_files ) {
+				$candidates[] = wp_normalize_path( trailingslashit( $program_files ) . 'nodejs/node.exe' );
+			}
+
+			if ( $program_files_x86 ) {
+				$candidates[] = wp_normalize_path( trailingslashit( $program_files_x86 ) . 'nodejs/node.exe' );
+			}
+
+			if ( $local_app_data ) {
+				$candidates[] = wp_normalize_path( trailingslashit( $local_app_data ) . 'Programs/nodejs/node.exe' );
+			}
+
+			$candidates[] = 'C:/Program Files/nodejs/node.exe';
+			$candidates[] = 'C:/Program Files (x86)/nodejs/node.exe';
+		}
+
+		return array_values( array_unique( array_filter( $candidates ) ) );
+	}
+
+	private function get_node_missing_message( array $node_candidates ) {
+		$lines   = array();
+		$lines[] = 'Sunucuda Node.js bulunamadı.';
+		$lines[] = 'Browser automation, WordPress/PHP ile AYNI makinede çalışan Node.js kurulumunu görmelidir.';
+		$lines[] = 'Kontrol edilen konumlar: ' . implode( ', ', $node_candidates );
+
+		if ( $this->is_windows() ) {
+			$lines[] = 'Windows localhost/XAMPP için öneri: Node.js Windows tarafına kurulmalı; sadece Git Bash veya farklı terminale kurulu olması yetmez.';
+			$lines[] = 'Kurulumdan sonra Apache/XAMPP yeniden başlatılmalı; çünkü Apache eski PATH ile çalışıyor olabilir.';
+			$lines[] = 'Kontrol: XAMPP\'nin kullandığı aynı kullanıcıyla `where node` ve `node -v` komutları çalışmalı.';
+			$lines[] = 'Playwright için ayrıca `npm install playwright` komutu aynı Node.js ortamında çalıştırılmalı.';
+			$lines[] = 'Node kurulu ama yine bulunamıyorsa `C:\\Program Files\\nodejs\\node.exe` veya `%LocalAppData%\\Programs\\nodejs\\node.exe` yolunda olduğundan emin olun.';
+		} else {
+			$lines[] = 'Node.js PATH içinde olmalı veya /usr/bin/node ya da /usr/local/bin/node yollarından biri erişilebilir olmalı.';
+			$lines[] = 'Playwright için aynı Node.js ortamında `npm install playwright` çalıştırılmalı.';
+		}
+
+		return implode( ' ', $lines );
+	}
+
+	private function is_windows() {
+		return '\\' === DIRECTORY_SEPARATOR;
 	}
 
 	private function get_html_sources( $html ) {
