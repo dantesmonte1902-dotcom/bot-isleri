@@ -64,6 +64,9 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
 15. Batch modunda fallback listesi sadece geçerli provider'lardan kuruluyor.
     Bu sayede boş Custom AI ayarları tüm batch işlemini fail etmiyor.
 
+16. OpenAI uyumlu provider istekleri artık kontrollü output token limiti ile gönderiliyor.
+    Bu sayede OpenRouter varsayılan çok yüksek max token isteği yüzünden batch hata vermez.
+
 Değişen dosyalar
 ----------------
 

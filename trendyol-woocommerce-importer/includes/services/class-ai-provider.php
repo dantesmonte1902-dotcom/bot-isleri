@@ -344,6 +344,7 @@ public function generate_text( $prompt, $options = array() ) {
 $endpoint = $this->get_endpoint();
 $api_key  = $this->get_api_key();
 $model    = $this->get_model();
+$max_tokens = max( 120, intval( $options['max_output_tokens'] ?? 512 ) );
 
 if ( '' === $endpoint || '' === $api_key || '' === $model ) {
 return new WP_Error(
@@ -380,6 +381,7 @@ array(
 'content' => (string) $prompt,
 ),
 ),
+'max_tokens'  => $max_tokens,
 'temperature' => 0.4,
 )
 ),
