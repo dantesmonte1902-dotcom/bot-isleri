@@ -79,6 +79,15 @@ AI Başlık Güncelle özelliğinde yapılan son geliştirmeler
     Bu tip sayfalarda veri almak için farklı bir kaynak (izinli API, tarayıcı otomasyonu veya önceden alınmış HTML)
     gerekir.
 
+18. "Sadece PHP ile kesin çözüm üretebilir miyiz?" sorusunun cevabı pratikte hayır.
+    Normal PHP istekleri (wp_remote_get, cURL, header/cookie taklidi) Trendyol bot korumasını aşmayı garanti etmez.
+    Yani salt PHP ile çalışan ve her zaman stabil sonuç veren bir çözüm burada garanti edilemez.
+    PHP tarafında ancak şu senaryolar güvenilir kabul edilebilir:
+    - Trendyol'un izin verdiği resmi / yasal bir API kullanılırsa
+    - HTML başka bir katmanda gerçek tarayıcı ile alınıp PHP'ye verilirse
+    - Önceden kaydedilmiş HTML veya ürün link listesi PHP içinde işlenirse
+    Bunun dışında "PHP tek başına canlı /sr sayfasını her zaman çeker" şeklinde kesin bir çözüm bu vaka için doğru değildir.
+
 Değişen dosyalar
 ----------------
 
