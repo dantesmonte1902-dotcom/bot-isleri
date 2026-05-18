@@ -102,6 +102,10 @@ class Trendyol_Category_Service {
 		$maxpages = $this->get_maxpages();
 		$count    = $this->fetch_product_links( $url, $dst, $maxpages );
 
+		if ( is_wp_error( $count ) ) {
+			return $count;
+		}
+
 		return array(
 			'name'      => $name,
 			'file'      => basename( $dst ),
@@ -112,27 +116,41 @@ class Trendyol_Category_Service {
 	}
 
 	private function get_trendyol_html( $url ) {
-		$ch = curl_init( $url );
-		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-		curl_setopt( $ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' );
-		curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, 1 );
-		curl_setopt(
-			$ch,
-			CURLOPT_HTTPHEADER,
+		if ( class_exists( 'Trendyol_Scraper' ) ) {
+			$scraper = new Trendyol_Scraper( $url );
+			return $scraper->fetch_page();
+		}
+
+		$response = wp_remote_get(
+			$url,
 			array(
-				'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+				'timeout'     => 35,
+				'redirection' => 5,
+				'httpversion' => '1.1',
+				'headers'     => array(
+					'User-Agent'                => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+					'Accept'                    => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+					'Accept-Language'           => 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+					'Cache-Control'             => 'no-cache',
+					'Pragma'                    => 'no-cache',
+					'Upgrade-Insecure-Requests' => '1',
+					'Referer'                   => 'https://www.trendyol.com/',
+				),
 			)
 		);
 
-		$html     = curl_exec( $ch );
-		$httpcode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-		curl_close( $ch );
-
-		if ( false === $html || 200 !== intval( $httpcode ) ) {
-			return false;
+		if ( is_wp_error( $response ) ) {
+			return $response;
 		}
 
-		return $html;
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		$body   = wp_remote_retrieve_body( $response );
+
+		if ( 200 !== $status || empty( $body ) || strlen( $body ) < 1000 ) {
+			return new WP_Error( 'category_fetch_failed', sprintf( 'Kategori sayfası alınamadı. HTTP: %d', $status ) );
+		}
+
+		return $body;
 	}
 
 	private function fetch_product_links( $category_url, $filename, $maxpages = 50 ) {
@@ -142,7 +160,11 @@ class Trendyol_Category_Service {
 			$url  = add_query_arg( 'pi', $i, $category_url );
 			$html = $this->get_trendyol_html( $url );
 
-			if ( ! $html ) {
+			if ( is_wp_error( $html ) ) {
+				if ( 1 === $i ) {
+					return new WP_Error( 'category_fetch_failed', $html->get_error_message() );
+				}
+
 				break;
 			}
 
@@ -155,13 +177,19 @@ class Trendyol_Category_Service {
 			}
 
 			if ( empty( $links ) ) {
+				if ( 1 === $i ) {
+					return new WP_Error( 'category_links_not_found', 'Kategori sayfasında Trendyol ürün linki bulunamadı.' );
+				}
+
 				break;
 			}
 
 			usleep( 300 * 1000 );
 		}
 
-		file_put_contents( $filename, implode( "\n", array_keys( $all_links ) ) );
+		if ( false === file_put_contents( $filename, implode( "\n", array_keys( $all_links ) ) ) ) {
+			return new WP_Error( 'category_file_write_failed', 'Ürün linkleri dosyaya yazılamadı.' );
+		}
 
 		return count( $all_links );
 	}
